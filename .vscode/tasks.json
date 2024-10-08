@@ -1,0 +1,82 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "cmake",
+            "label": "CMake: build",
+            "command": "build",
+            "targets": [
+                "all"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "detail": "CMake template build task"
+        },
+        {
+            "type": "cmake",
+            "label": "CMake: build cuda_fx_modeler",
+            "command": "build",
+            "targets": [
+                "cuda_fx_modeler"
+            ],
+            "group": {
+                "kind": "build",
+            },
+            "problemMatcher": [],
+            "detail": "CMake template build task"
+        },
+        {
+            "type": "cmake",
+            "label": "CMake: build test",
+            "command": "build",
+            "targets": [
+                "test"
+            ],
+            "group": {
+                "kind": "build",
+            },
+            "problemMatcher": [],
+            "detail": "CMake template build task"
+        },
+        {
+            "type": "cmake",
+            "label": "CMake: build scratch",
+            "command": "build",
+            "targets": [
+                "scratch"
+            ],
+            "group": {
+                "kind": "build",
+            },
+            "problemMatcher": [],
+            "detail": "CMake template build task"
+        },
+        {
+            "type": "cmake",
+            "label": "CMake: clean rebuild",
+            "command": "cleanRebuild",
+            "targets": [
+                "all"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "CMake template clean rebuild task"
+        },
+        {
+            "label": "Clean CMake Build Folder",
+            "type": "cmake",
+            "command": "build",
+            "targets": [
+                "clean"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+            },
+            "detail": "Cleans the CMake build folder."
+        }
+    ]
+}

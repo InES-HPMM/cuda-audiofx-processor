@@ -1,0 +1,34 @@
+{
+    "configurations": [
+        {
+            "name": "cuda_fx_modeler",
+            "type": "cuda-gdb",
+            "request": "launch",
+            "program": "${workspaceFolder}/dist/cuda_fx_modeler"
+        },
+        {
+            "name": "test",
+            "type": "cuda-gdb",
+            "request": "launch",
+            "program": "${workspaceFolder}/dist/test"
+        },
+        {
+            "name": "scratch",
+            "type": "cuda-gdb",
+            "request": "launch",
+            "program": "${workspaceFolder}/dist/scratch"
+        },
+        {
+            "name": "fx_performance_test",
+            "type": "cuda-gdb",
+            "request": "launch",
+            "program": "${workspaceFolder}/dist/fx_performance_test"
+        },
+        {
+            "name": "signal_graph_performance_test",
+            "type": "cuda-gdb",
+            "request": "launch",
+            "program": "${workspaceFolder}/dist/signal_graph_performance_test"
+        }
+    ]
+}

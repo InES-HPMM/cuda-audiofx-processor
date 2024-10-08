@@ -1,0 +1,15 @@
+{
+    "recommendations": [
+        "nvidia.nsight-vscode-edition",
+        "ms-vscode.cpptools",
+        "ms-vscode.makefile-tools",
+        "twxs.cmake",
+        "ms-vscode.cmake-tools",
+        "cheshirekow.cmake-format",
+        "ms-azuretools.vscode-docker",
+        "rsip-vision.nvidia-smi-plus",
+        "nmustakin.vscuda",
+        "kriegalex.vscode-cudacpp",
+        "josetr.cmake-language-support-vscode"
+    ]
+}

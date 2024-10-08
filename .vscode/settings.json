@@ -1,0 +1,9 @@
+{
+    "cmake.sourceDirectory": "${workspaceFolder}/cuda_fx_modeler",
+    "cmake.buildDirectory": "${workspaceFolder}/cuda_fx_modeler/build",
+    "cmake.environment": {
+        "DIST": "${workspaceFolder}/dist"
+    },
+    "nvidia-smi-plus.refresh.autoRefresh": false,
+    "C_Cpp.default.cppStandard": "c++20",
+}

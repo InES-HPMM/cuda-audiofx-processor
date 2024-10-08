@@ -1,0 +1,15 @@
+name: scso-mt-jetpack-sdk-host
+services:
+  app:
+    container_name: 5.1.2-custom
+    image: jetpack-sdk-host:5.1.2-custom
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DISPLAY: $DISPLAY
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    network_mode: host
+    tty: true
+    stdin_open: true
