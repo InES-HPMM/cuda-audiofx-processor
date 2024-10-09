@@ -1,10 +1,10 @@
 {
     "configurations": [
         {
-            "name": "cuda_fx_modeler",
+            "name": "cuda_fx_processor",
             "type": "cuda-gdb",
             "request": "launch",
-            "program": "${workspaceFolder}/dist/cuda_fx_modeler"
+            "program": "${workspaceFolder}/dist/cuda_fx_processor"
         },
         {
             "name": "test",

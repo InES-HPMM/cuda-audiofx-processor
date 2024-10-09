@@ -13,4 +13,4 @@ sleep 2
 taskset -c $ISOLATED_CPUS /usr/bin/jackd -t2000 -P $RT_PRIO -dalsa -r $SAMPLE_RATE -n $PERIODS -Xnone -D -C $SOUNDCARD_ID -P $SOUNDCARD_ID &
 sleep 2
 PID=`pidof jackd`
-./../dist/cuda_fx_modeler || kill $PID
+./../dist/cuda_fx_processor || kill $PID
