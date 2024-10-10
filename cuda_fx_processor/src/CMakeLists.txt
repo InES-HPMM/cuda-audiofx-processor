@@ -4,6 +4,7 @@ add_subdirectory(utils_cuda)
 add_subdirectory(audio)
 add_subdirectory(audio_cuda)
 add_subdirectory(eval)
+add_subdirectory(trt)
 
 
 add_executable(${PROJECT_NAME} main.cpp)
