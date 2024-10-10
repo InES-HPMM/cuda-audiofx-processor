@@ -1,7 +1,11 @@
 # CMake example:https://github.com/sun1211/cmake_with_add_subdirectory/tree/master
 
 cmake_minimum_required(VERSION 3.28.0)
-project(cuda_fx_modeler LANGUAGES CUDA CXX)
+
+get_filename_component(DIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
+string(REPLACE " " "_" DIR_NAME ${DIR_NAME})
+set(PROJECT_NAME ${DIR_NAME})
+project(${PROJECT_NAME} LANGUAGES CUDA CXX)
 
 set(CMAKE_CUDA_ARCHITECTURES 87)#https://arnon.dk/matching-sm-architectures-arch-and-gencode-for-various-nvidia-cards/
 set(CMAKE_C_COMPILER "/usr/bin/gcc")

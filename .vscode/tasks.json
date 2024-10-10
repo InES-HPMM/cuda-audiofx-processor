@@ -17,10 +17,10 @@
         },
         {
             "type": "cmake",
-            "label": "CMake: build cuda_fx_modeler",
+            "label": "CMake: build cuda_fx_processor",
             "command": "build",
             "targets": [
-                "cuda_fx_modeler"
+                "cuda_fx_processor"
             ],
             "group": {
                 "kind": "build",

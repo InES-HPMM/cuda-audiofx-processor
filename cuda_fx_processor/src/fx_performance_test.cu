@@ -35,7 +35,7 @@ void stream_vs_graph(size_t process_buffer_size, size_t n_warmup, size_t n_measu
     test(measurements, IGpuFx::createConv2i1(ir_pcm->clone(), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     test(measurements, IGpuFx::createConv1i1(ir_pcm->clone(), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     test(measurements, IGpuFx::createBiquadEQ(IBiquadParam::create(BiquadType::PEAK, 1000, 21, 0.6)), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
-    test(measurements, IGpuFx::createTrtEngine(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, 48), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
+    test(measurements, IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, 48), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     test(measurements, IGpuFx::createGate(0.2, 100, 5, 50), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     PerformanceMeasurement::writeStatisticsToCsv(path::out("stream-vs-graph-f" + std::to_string(process_buffer_size) + "-nw" + std::to_string(n_warmup) + "-nm" + std::to_string(n_measure) + "-ns" + std::to_string(process_buffer_size) + "-rt" + std::to_string(simulate_buffer_intervals) + "-ip" + std::to_string(process_in_place) + ".csv"), measurements);
     delete ir_pcm;
@@ -47,7 +47,7 @@ void stream_all(size_t process_buffer_size, size_t n_warmup, size_t n_measure, b
     // testStream(measurements, IGpuFx::createConv2i1(ir_pcm->clone(), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     // testStream(measurements, IGpuFx::createConv1i1(ir_pcm->clone(), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     // testStream(measurements, IGpuFx::createBiquadEQ(IBiquadParam::create(BiquadType::PEAK, 1000, 21, 0.6)), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
-    // testStream(measurements, IGpuFx::createTrtEngine(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, 48), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
+    // testStream(measurements, IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, 48), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     testStream(measurements, IGpuFx::createGate(0.2, 100, 5, 50), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     PerformanceMeasurement::writeStatisticsToCsv(path::out("fx-stream-f" + std::to_string(process_buffer_size) + "-nw" + std::to_string(n_warmup) + "-nm" + std::to_string(n_measure) + "-ns" + std::to_string(process_buffer_size) + "-rt" + std::to_string(simulate_buffer_intervals) + "-ip" + std::to_string(process_in_place) + ".csv"), measurements);
     delete ir_pcm;
@@ -60,7 +60,7 @@ void graph_all(size_t process_buffer_size, size_t n_warmup, size_t n_measure, bo
     // testGraph(measurements, IGpuFx::createConv2i1(ir_pcm->clone(), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     // testGraph(measurements, IGpuFx::createConv1i1(ir_pcm->clone(), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     // testGraph(measurements, IGpuFx::createBiquadEQ(IBiquadParam::create(BiquadType::PEAK, 1000, 21, 0.6)), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
-    // testGraph(measurements, IGpuFx::createTrtEngine(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, 48), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
+    // testGraph(measurements, IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, 48), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     testGraph(measurements, IGpuFx::createGate(0.2, 100, 5, 50), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     PerformanceMeasurement::writeStatisticsToCsv(path::out("fx-graph-f" + std::to_string(process_buffer_size) + "-nw" + std::to_string(n_warmup) + "-nm" + std::to_string(n_measure) + "-ns" + std::to_string(process_buffer_size) + "-rt" + std::to_string(simulate_buffer_intervals) + "-ip" + std::to_string(process_in_place) + ".csv"), measurements);
     delete ir_pcm;

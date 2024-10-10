@@ -110,7 +110,7 @@ void parallelNam(std::vector<PerformanceMeasurement*>& measurements, size_t proc
 
     std::vector<IGpuSignalVertex*> vertices;
     for (size_t i = 0; i < n_lanes; i++) {
-        auto vertex = graph->split({IGpuFx::createTrtEngine(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, process_buffer_size)}, input_map)[0];
+        auto vertex = graph->split({IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, process_buffer_size)}, input_map)[0];
         vertices.push_back(vertex);
     }
 
@@ -128,7 +128,7 @@ void serialNam(std::vector<PerformanceMeasurement*>& measurements, size_t proces
 
     std::vector<IGpuSignalVertex*> vertices;
     for (size_t i = 0; i < n_lanes; i++) {
-        auto vertex = graph->add(IGpuFx::createTrtEngine(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, process_buffer_size));
+        auto vertex = graph->add(IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, process_buffer_size));
         vertices.push_back(vertex);
     }
 
@@ -185,7 +185,7 @@ void gitParallel(std::vector<PerformanceMeasurement*>& measurements, size_t proc
         auto input_map = graph->addRoot(IGpuFx::createInputMap({i}));
         auto vertex = graph->add({IGpuFx::createGate(0.2, 100, 5, 50)}, input_map);
         vertex = graph->add(IGpuFx::createGate(0.2, 100, 5, 50), vertex);
-        vertex = graph->add(IGpuFx::createTrtEngine(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, process_buffer_size), vertex);
+        vertex = graph->add(IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, process_buffer_size), vertex);
         vertex = graph->add(IGpuFx::createConv1i1(IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-1c.wav")), 1 << 12, 0, true), vertex);
         vertex = graph->add(IGpuFx::createBiquadEQ({
                                 IBiquadParam::create(BiquadType::PEAK, 500, -13, 3),
@@ -219,8 +219,8 @@ void gitComplex(std::vector<PerformanceMeasurement*>& measurements, size_t proce
         auto vertex = graph->add({IGpuFx::createGate(0.2, 100, 5, 50)}, input_map);
         vertex = graph->add(IGpuFx::createGate(0.2, 100, 5, 50), vertex);
         auto vertices = graph->split({
-                                         IGpuFx::createTrtEngine(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, process_buffer_size),
-                                         IGpuFx::createTrtEngine(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, process_buffer_size),
+                                         IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, process_buffer_size),
+                                         IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, process_buffer_size),
                                      },
                                      vertex);
 
