@@ -40,6 +40,13 @@ class BiquadParam : public IBiquadParam {
     double _quality;
     SampleRate _samplerate;
 
+    double b0 = 0;
+    double b1 = 0;
+    double b2 = 0;
+    double a0 = 0;
+    double a1 = 0;
+    double a2 = 0;
+
     // Parameters defined in
     // https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
     double GetA() const { return pow(10.0, _gain_dB / 40.0); };
@@ -53,7 +60,14 @@ class BiquadParam : public IBiquadParam {
 
     size_t GetFirDegree() const { return _fir_degree; };
     size_t GetIirDegree() const { return _iir_degree; };
-    virtual void getCoefficients(float* fir_coef, float* iir_coef) = 0;
+    virtual void getCoefficients(float* fir_coef, float* iir_coef) {
+        fir_coef[0] = b0 / a0;
+        fir_coef[1] = b1 / a0;
+        fir_coef[2] = b2 / a0;
+        iir_coef[0] = 0;
+        iir_coef[1] = -a1 / a0;
+        iir_coef[2] = -a2 / a0;
+    }
     virtual void setFrequency(double frequency) { _frequency = frequency; };
     virtual void setGain(double gain) { _gain_dB = gain; };
     virtual void setQuality(double quality) { _quality = quality; };
@@ -64,38 +78,145 @@ class BiquadPeakParams : public BiquadParam {
     BiquadPeakParams(const double frequency, const double gain_dB, const double quality, const SampleRate sampleRate)
         : BiquadParam(frequency, gain_dB, quality, sampleRate) {}
 
-    void getCoefficients(float* fir_coef, float* iir_coef) {
+    void getCoefficients(float* fir_coef, float* iir_coef) override {
         // Peak filter
         double a = this->GetA();
         double omega_0 = this->GetOmega0();
         double alpha = this->GetAlpha(omega_0);
         double cosw = this->GetCosW(omega_0);
 
-        double b0 = 1.0 + alpha * a;
-        double b1 = -2.0 * cosw;
-        double b2 = 1.0 - alpha * a;
-        double a0 = 1.0 + alpha / a;
-        double a1 = -2.0 * cosw;
-        double a2 = 1.0 - alpha / a;
+        b0 = 1.0 + alpha * a;
+        b1 = -2.0 * cosw;
+        b2 = 1.0 - alpha * a;
+        a0 = 1.0 + alpha / a;
+        a1 = -2.0 * cosw;
+        a2 = 1.0 - alpha / a;
 
-        // Direct Form 1 coefficient preparation (cf Eq. (4))
-        // https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
-        fir_coef[0] = b0 / a0;
-        fir_coef[1] = b1 / a0;
-        fir_coef[2] = b2 / a0;
-        iir_coef[0] = 0;
-        iir_coef[1] = -a1 / a0;
-        iir_coef[2] = -a2 / a0;
+        BiquadParam::getCoefficients(fir_coef, iir_coef);
     }
     IBiquadParam* clone() {
         return new BiquadPeakParams(_frequency, _gain_dB, _quality, _samplerate);
     }
 };
 
-IBiquadParam* IBiquadParam::create(BiquadType type, double frequency, double gain_dB, double quality, SampleRate sample_rate) {
+class BiquadLowPassParams : public BiquadParam {
+   public:
+    BiquadLowPassParams(const double frequency, const double gain_dB, const double quality, const SampleRate sampleRate)
+        : BiquadParam(frequency, gain_dB, quality, sampleRate) {}
+
+    void getCoefficients(float* fir_coef, float* iir_coef) override {
+        // Low pass filter
+        double a = this->GetA();
+        double omega_0 = this->GetOmega0();
+        double alpha = this->GetAlpha(omega_0);
+        double cosw = this->GetCosW(omega_0);
+
+        b0 = (1.0 - cosw) / 2.0;
+        b1 = 1.0 - cosw;
+        b2 = (1.0 - cosw) / 2.0;
+        a0 = 1.0 + alpha;
+        a1 = -2.0 * cosw;
+        a2 = 1.0 - alpha;
+        BiquadParam::getCoefficients(fir_coef, iir_coef);
+    }
+    IBiquadParam* clone() {
+        return new BiquadLowPassParams(_frequency, _gain_dB, _quality, _samplerate);
+    }
+};
+
+class BiquadHighPassParams : public BiquadParam {
+   public:
+    BiquadHighPassParams(const double frequency, const double gain_dB, const double quality, const SampleRate sampleRate)
+        : BiquadParam(frequency, gain_dB, quality, sampleRate) {}
+
+    void getCoefficients(float* fir_coef, float* iir_coef) override {
+        // High pass filter
+        double a = this->GetA();
+        double omega_0 = this->GetOmega0();
+        double alpha = this->GetAlpha(omega_0);
+        double cosw = this->GetCosW(omega_0);
+
+        double b0 = (1.0 + cosw) / 2.0;
+        double b1 = -(1.0 + cosw);
+        double b2 = (1.0 + cosw) / 2.0;
+        double a0 = 1.0 + alpha;
+        double a1 = -2.0 * cosw;
+        double a2 = 1.0 - alpha;
+        BiquadParam::getCoefficients(fir_coef, iir_coef);
+    }
+    IBiquadParam* clone() {
+        return new BiquadHighPassParams(_frequency, _gain_dB, _quality, _samplerate);
+    }
+};
+
+class BiquadLowShelfParams : public BiquadParam {
+   public:
+    BiquadLowShelfParams(const double frequency, const double gain_dB, const double quality, const SampleRate sampleRate)
+        : BiquadParam(frequency, gain_dB, quality, sampleRate) {}
+
+    void getCoefficients(float* fir_coef, float* iir_coef) override {
+        // Low shelf filter
+        double a = this->GetA();
+        double omega_0 = this->GetOmega0();
+        double alpha = this->GetAlpha(omega_0);
+        double cosw = this->GetCosW(omega_0);
+        double sqrt_a = sqrt(a);
+
+        double beta = sqrt_a / _quality;
+        double b0 = a * ((a + 1) - (a - 1) * cosw + 2 * sqrt_a * beta);
+        double b1 = 2 * a * ((a - 1) - (a + 1) * cosw);
+        double b2 = a * ((a + 1) - (a - 1) * cosw - 2 * sqrt_a * beta);
+        double a0 = (a + 1) + (a - 1) * cosw + 2 * sqrt_a * beta;
+        double a1 = -2 * ((a - 1) + (a + 1) * cosw);
+        double a2 = (a + 1) + (a - 1) * cosw - 2 * sqrt_a * beta;
+        BiquadParam::getCoefficients(fir_coef, iir_coef);
+    }
+    IBiquadParam* clone() {
+        return new BiquadLowShelfParams(_frequency, _gain_dB, _quality, _samplerate);
+    }
+};
+
+class BiquadHighShelfParams : public BiquadParam {
+   public:
+    BiquadHighShelfParams(const double frequency, const double gain_dB, const double quality, const SampleRate sampleRate)
+        : BiquadParam(frequency, gain_dB, quality, sampleRate) {}
+
+    void getCoefficients(float* fir_coef, float* iir_coef) override {
+        // High shelf filter
+        double a = this->GetA();
+        double omega_0 = this->GetOmega0();
+        double alpha = this->GetAlpha(omega_0);
+        double cosw = this->GetCosW(omega_0);
+        double sqrt_a = sqrt(a);
+
+        double beta = sqrt_a / _quality;
+        double b0 = a * ((a + 1) + (a - 1) * cosw + 2 * sqrt_a * beta);
+        double b1 = -2 * a * ((a - 1) + (a + 1) * cosw);
+        double b2 = a * ((a + 1) + (a - 1) * cosw - 2 * sqrt_a * beta);
+        double a0 = (a + 1) - (a - 1) * cosw + 2 * sqrt_a * beta;
+        double a1 = 2 * ((a - 1) - (a + 1) * cosw);
+        double a2 = (a + 1) - (a - 1) * cosw - 2 * sqrt_a * beta;
+        BiquadParam::getCoefficients(fir_coef, iir_coef);
+    }
+    IBiquadParam* clone() {
+        return new BiquadHighShelfParams(_frequency, _gain_dB, _quality, _samplerate);
+    }
+};
+
+IBiquadParam*
+IBiquadParam::create(BiquadType type, double frequency, double gain_dB, double quality, SampleRate sample_rate) {
     switch (type) {
         case BiquadType::PEAK:
             return new BiquadPeakParams(frequency, gain_dB, quality, sample_rate);
+        case BiquadType::LOWPASS:
+            return new BiquadLowPassParams(frequency, gain_dB, quality, sample_rate);
+        case BiquadType::HIGHPASS:
+            return new BiquadHighPassParams(frequency, gain_dB, quality, sample_rate);
+        case BiquadType::LOWSHELF:
+            return new BiquadLowShelfParams(frequency, gain_dB, quality, sample_rate);
+        case BiquadType::HIGHSHELF:
+            return new BiquadHighShelfParams(frequency, gain_dB, quality, sample_rate);
+
         default:
             throw std::runtime_error("Not Implemented");
     }
