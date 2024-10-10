@@ -1,4 +1,5 @@
 
+#pragma once
 #include <buffer.cuh>
 #include <enums.hpp>
 #include <string>

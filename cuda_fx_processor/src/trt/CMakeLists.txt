@@ -7,6 +7,8 @@ add_library(
     STATIC
     trt_engine.cuh
     trt_engine.cu
+    onnx_parser.cuh
+    onnx_parser.cu
     )
 # enables pathless includes from other libraries (note that the libraries from the listed directories also need to be linked)
 target_include_directories(
