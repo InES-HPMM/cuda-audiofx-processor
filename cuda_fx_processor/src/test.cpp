@@ -79,7 +79,7 @@ bool trt_engine_test() {
     size_t buffer_size = 48;
     IFPSignal* dry = IFPSignal::readFromFile(path::res("git-48k-24b-1c.wav"), ChannelOrder::INTERLEAVED);
     IFPSignal* wet = IFPSignal::readFromFile(path::res("git-pedal-amp-48k-24b-1c.wav"), ChannelOrder::INTERLEAVED);
-    IGpuFx* fx = IGpuFx::createTrtEngine("/home/nvidia/git/mt/res/models/nam_convnet_pedal_amp.onnx", "/home/nvidia/git/mt/out", TrtEnginePrecision::FP32, buffer_size);
+    IGpuFx* fx = IGpuFx::createNam("/home/nvidia/git/mt/res/models/nam_convnet_pedal_amp.onnx", "/home/nvidia/git/mt/out", TrtEnginePrecision::FP32, buffer_size);
 
     IGpuFxEvaluator* gpu_fx_test = IGpuFxEvaluator::createGraphEval(fx);
     return gpu_fx_test->testAccuracy(dry, wet, buffer_size, false, 1.5e-3, 0, true);

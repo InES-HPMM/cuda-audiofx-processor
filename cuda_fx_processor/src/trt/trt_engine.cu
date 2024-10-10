@@ -77,14 +77,14 @@ class TrtEngineImpl : public TrtEngine {
 
     bool buildTRTModel(Dims opt_in_shape, Dims min_in_shape = Dims{}, Dims max_in_shape = Dims{}) {
         if (!std::filesystem::exists(_onnx_model_path)) {
-            spdlog::error("FxTrtEngine.buildTRTModel Could not find model at path: {}", _engine_path.string());
+            spdlog::error("Could not find model at path: {}", _engine_path.string());
             return false;
         }
 
         // Create our engine builder.
         auto builder = std::unique_ptr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(_nv_infer_logger));
         if (!builder) {
-            spdlog::error("FxTrtEngine.buildTRTModel Create engine builder failed");
+            spdlog::error("Create engine builder failed");
             return false;
         }
 
@@ -93,21 +93,21 @@ class TrtEngineImpl : public TrtEngine {
         auto explicitBatch = 1U << static_cast<uint32_t>(NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
         auto network = std::unique_ptr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(explicitBatch));
         if (!network) {
-            spdlog::error("FxTrtEngine.buildTRTModel Network creation failed");
+            spdlog::error("Network creation failed");
             return false;
         }
 
         // Create a parser for reading the onnx file.
         auto parser = std::unique_ptr<nvonnxparser::IParser>(nvonnxparser::createParser(*network, _nv_infer_logger));
         if (!parser) {
-            spdlog::error("FxTrtEngine.buildTRTModel Parser creation failed");
+            spdlog::error("Parser creation failed");
             return false;
         }
 
         // Parse the buffer we read into memory.
         auto parsed = parser->parseFromFile(_onnx_model_path.c_str(), static_cast<int32_t>(ILogger::Severity::kVERBOSE));
         if (!parsed) {
-            spdlog::error("FxTrtEngine.buildTRTModel Parsing failed");
+            spdlog::error("Parsing failed");
             return false;
         }
 
@@ -115,7 +115,7 @@ class TrtEngineImpl : public TrtEngine {
         const auto numInputs = network->getNbInputs();
         const auto numOutputs = network->getNbOutputs();
         if (numInputs != 1 || numOutputs != 1) {
-            spdlog::error("FxTrtEngine.buildTRTModel Model should have exactly 1 input and 1 output but has {} inputs and {} outputs!", numInputs, numOutputs);
+            spdlog::error("Model should have exactly 1 input and 1 output but has {} inputs and {} outputs!", numInputs, numOutputs);
             return false;
         }
 
@@ -134,7 +134,7 @@ class TrtEngineImpl : public TrtEngine {
 
         // Ensure the GPU supports TF36 inference
         if (!builder->platformHasTf32()) {
-            spdlog::warn("FxTrtEngine.buildTRTModel GPU doesn't support Tf32 precision");
+            spdlog::warn("GPU doesn't support Tf32 precision");
         }
         config->setFlag(BuilderFlag::kTF32);
 
@@ -149,7 +149,7 @@ class TrtEngineImpl : public TrtEngine {
         // Doing so will provide you with more information on why exactly it is failing.
         std::unique_ptr<IHostMemory> plan{builder->buildSerializedNetwork(*network, *config)};
         if (!plan) {
-            spdlog::error("FxTrtEngine.buildTRTModel Failed to build TRT engine");
+            spdlog::error("Failed to build TRT engine");
             return false;
         }
 
@@ -175,7 +175,7 @@ class TrtEngineImpl : public TrtEngine {
         file.seekg(0, std::ios::beg);
         std::vector<char> buffer(size);
         if (!file.read(buffer.data(), size)) {
-            spdlog::error("FxTrtEngine.loadTRTModel Unable to read engine file");
+            spdlog::error("Unable to read engine file");
             return false;
         }
         file.close();
@@ -183,14 +183,14 @@ class TrtEngineImpl : public TrtEngine {
         // Create a runtime to deserialize the engine file.
         _runtime = std::unique_ptr<IRuntime>{createInferRuntime(_nv_infer_logger)};
         if (!_runtime) {
-            spdlog::error("FxTrtEngine.loadTRTModel Failed to create infer runtime");
+            spdlog::error("Failed to create infer runtime");
             return false;
         }
 
         // Create an engine, a representation of the optimized model.
         _engine = std::unique_ptr<nvinfer1::ICudaEngine>(_runtime->deserializeCudaEngine(buffer.data(), buffer.size()));
         if (!_engine) {
-            spdlog::error("FxTrtEngine.loadTRTModel Failed to create engine");
+            spdlog::error("Failed to create engine");
             return false;
         }
 
@@ -220,7 +220,7 @@ class TrtEngineImpl : public TrtEngine {
             return false;
         }
 
-        spdlog::debug("FxTrtEngine.loadTRTModel Successfully loaded network {}", _engine_path.filename().string());
+        spdlog::debug("Successfully loaded network {}", _engine_path.filename().string());
         return true;
     }
 

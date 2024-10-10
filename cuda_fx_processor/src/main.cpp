@@ -31,8 +31,8 @@ void run_jack(int timeout = 0) {
         auto vertex = graph->add({IGpuFx::createGate(0.2, 100, 5, 50)}, input_map);
         vertex = graph->add(IGpuFx::createGate(0.2, 100, 5, 50), vertex);
         auto vertices = graph->split({
-                                         IGpuFx::createTrtEngine(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size),
-                                         IGpuFx::createTrtEngine(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size),
+                                         IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size),
+                                         IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size),
                                      },
                                      vertex);
 

@@ -29,7 +29,7 @@ class IGpuFx {
     static IGpuFx* createPassThrough();
     static IGpuFx* createBiquadEQ(IBiquadParam* param, size_t n_channels = 1);
     static IGpuFx* createBiquadEQ(std::vector<IBiquadParam*> params, size_t n_channels = 1);
-    static IGpuFx* createTrtEngine(std::string onnx_model_path, std::string trt_model_dir, TrtEnginePrecision precision, size_t buf_size);
+    static IGpuFx* createNam(std::string onnx_model_path, std::string trt_model_dir, TrtEnginePrecision precision, size_t buf_size);
     static IGpuFx* createMixSegment(size_t n_in_channels, size_t n_out_channels);
     static IGpuFx* createMixInterleaved(size_t n_in_channels, size_t n_out_channels);
     static IGpuFx* createInputMap(std::vector<size_t> input_mapping);

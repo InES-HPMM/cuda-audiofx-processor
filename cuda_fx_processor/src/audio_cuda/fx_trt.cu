@@ -42,7 +42,7 @@ class NvInverLogger : public nvinfer1::ILogger {
     }
 };
 
-class FxTrtEngine : public GpuFx {
+class FxNam : public GpuFx {
    private:
     IMemCpyNode* _src_node = nullptr;
     IMemCpyNode* _dest_node = nullptr;
@@ -67,15 +67,15 @@ class FxTrtEngine : public GpuFx {
     }
 
    public:
-    FxTrtEngine(TrtEngine* trt_engine) : GpuFx("FxNam"), _trt_engine(trt_engine) {}
-    FxTrtEngine(std::string onnx_model_path, std::string trt_model_dir, TrtEnginePrecision precision) : FxTrtEngine(TrtEngine::create(onnx_model_path, trt_model_dir, precision)) {}
+    FxNam(TrtEngine* trt_engine) : GpuFx("FxNam"), _trt_engine(trt_engine) {}
+    FxNam(std::string onnx_model_path, std::string trt_model_dir, TrtEnginePrecision precision) : FxNam(TrtEngine::create(onnx_model_path, trt_model_dir, precision)) {}
 
-    ~FxTrtEngine() {
+    ~FxNam() {
         delete _trt_engine;
     }
 
     GpuFx* clone() override {
-        return new FxTrtEngine(_trt_engine->clone());
+        return new FxNam(_trt_engine->clone());
     }
 
     void configure(size_t process_buffer_size, size_t n_input_channels, size_t n_output_channels) override {
@@ -116,6 +116,6 @@ class FxTrtEngine : public GpuFx {
     }
 };
 
-IGpuFx* IGpuFx::createTrtEngine(std::string onnx_model_path, std::string trt_model_dir, TrtEnginePrecision precision, size_t buf_size) {
-    return new FxTrtEngine(onnx_model_path, trt_model_dir, precision);
+IGpuFx* IGpuFx::createNam(std::string onnx_model_path, std::string trt_model_dir, TrtEnginePrecision precision, size_t buf_size) {
+    return new FxNam(onnx_model_path, trt_model_dir, precision);
 }
