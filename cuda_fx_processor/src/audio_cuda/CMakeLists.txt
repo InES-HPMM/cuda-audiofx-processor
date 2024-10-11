@@ -11,7 +11,7 @@ add_library(
     gpu_fx.cu
     fx_conv_fd.cu
     fx_eq.cu
-    fx_trt.cu
+    fx_nam.cu
     fx_map.cu
     fx_util.cu
     fx_gate.cu
