@@ -32,7 +32,7 @@ class FxInputMap : public FxIOMap {
     FxInputMap(std::vector<size_t> input_mapping) : FxIOMap("FxInputMap", input_mapping.size(), {input_mapping}) {}
 
     cudaStream_t process(cudaStream_t stream, const BufferRack* dst, const BufferRack* src, cudaStreamCaptureStatus capture_status) override {
-        IMemCpyNode::launchOrRecordMulti(MultiMemcpyType::Segmented2Interleaved, dst->getDataMod(), src->getDataListMod(), sizeof(float), _n_proc_frames, _n_out_channels, _channel_mapping, cudaMemcpyDeviceToDevice, stream, _node, capture_status);
+        IMemCpyNode::launchOrRecordMulti(MultiMemcpyType::Segmented2Interleaved, dst->getDataMod(), src->getDataListMod(), sizeof(float), _n_proc_frames, _n_out_channels, _channel_mapping, cudaMemcpyDeviceToDevice, stream, &_node, capture_status);
         return stream;
     }
 };
@@ -52,7 +52,7 @@ class FxOutputMap : public FxIOMap {
     }
 
     cudaStream_t process(cudaStream_t stream, const BufferRack* dst, const BufferRack* src, cudaStreamCaptureStatus capture_status) override {
-        IMemCpyNode::launchOrRecordMulti(MultiMemcpyType::Interleaved2Segmented, (void*)dst->getDataListMod(), src->getDataMod(), sizeof(float), _n_proc_frames, _n_in_channels, _channel_mapping, cudaMemcpyDeviceToDevice, stream, _node, capture_status);
+        IMemCpyNode::launchOrRecordMulti(MultiMemcpyType::Interleaved2Segmented, (void*)dst->getDataListMod(), src->getDataMod(), sizeof(float), _n_proc_frames, _n_in_channels, _channel_mapping, cudaMemcpyDeviceToDevice, stream, &_node, capture_status);
         return stream;
     }
 };

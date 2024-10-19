@@ -2,6 +2,7 @@
 
 #include <cmath>  // pow, sin
 #include <cuda_ext.cuh>
+#include <kernels.cuh>
 #include <operators.cuh>
 
 #include "gpu_fx.cu"
@@ -296,32 +297,34 @@ class FxBiquad : public GpuFx {
     std::vector<BiquadBand*> _bands;
 
     IMemCpyNode* _src_node = nullptr;
-    IMemCpyNode* _dest_node = nullptr;
+    float* _wet = nullptr;
 
     void allocateBuffers() override {
         for (auto band : _bands) {
             band->allocateBuffers();
         }
+        gpuErrChk(cudaMalloc(&_wet, sizeof(float) * _n_proc_samples));
     }
 
     void deallocateBuffers() override {
         for (auto band : _bands) {
             band->deallocateBuffers();
         }
+        gpuErrChk(cudaFree(_wet));
         if (_src_node) delete _src_node;
-        if (_dest_node) delete _dest_node;
     }
 
     cudaStream_t _process(cudaStream_t stream, float* dst, const float* src, cudaStreamCaptureStatus capture_status) {
-        IMemCpyNode::launchOrRecord1D(_bands[0]->getProcBuffer(), src, sizeof(float), _n_proc_samples, cudaMemcpyDeviceToDevice, stream, _src_node, capture_status);
+        IMemCpyNode::launchOrRecord1D(_bands[0]->getProcBuffer(), src, sizeof(float), _n_proc_samples, cudaMemcpyDeviceToDevice, stream, &_src_node, capture_status);
         for (size_t i = 0; i < _bands.size(); i++) {
-            _bands[i]->process(stream, i < _bands.size() - 1 ? _bands[i + 1]->getProcBuffer() : dst);
+            _bands[i]->process(stream, i < _bands.size() - 1 ? _bands[i + 1]->getProcBuffer() : _wet);
         }
+        IKernelNode::launchOrRecord(1, _n_proc_samples, 0, (void*)fff_mix, new void*[5]{&dst, &src, &_wet, &_n_proc_samples, &_mix_ratio}, stream, &_mix_node, capture_status);
         return stream;
     }
 
    public:
-    FxBiquad(std::vector<IBiquadParam*> params, size_t n_channels) : GpuFx("FxBiquad"), _n_channels_default(n_channels) {
+    FxBiquad(std::vector<IBiquadParam*> params, size_t n_channels) : GpuFx("FxEq"), _n_channels_default(n_channels) {
         for (auto param : params) {
             _bands.push_back(new BiquadBand(static_cast<BiquadParam*>(param)));
         }
@@ -350,8 +353,8 @@ class FxBiquad : public GpuFx {
     }
 
     void updateBufferPtrs(cudaGraphExec_t procGraphExec, const BufferRack* dst, const BufferRack* src) override {
-        _src_node->updateSrcPtr(src->getDataMod(), procGraphExec);
-        _dest_node->updateDstPtr(dst->getDataMod(), procGraphExec);
+        _src_node->updateExecSrcPtr(src->getDataMod(), procGraphExec);
+        _mix_node->updateExecKernelParamAt(0, dst->getDataMod(), procGraphExec);
     }
 
     cudaStream_t setup(cudaStream_t stream, cudaStreamCaptureStatus capture_status) override {

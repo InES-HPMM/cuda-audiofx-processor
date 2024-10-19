@@ -1,7 +1,7 @@
 #include "path.hpp"
 namespace path {
 
-fs::path _workspace = fs::path("/home/nvidia/git/mt");
+fs::path _workspace = fs::path("/home/nvidia/git/mt-dist");
 fs::path _res = _workspace / "res";
 fs::path _models = _res / "models";
 fs::path _ir = _res / "ir";

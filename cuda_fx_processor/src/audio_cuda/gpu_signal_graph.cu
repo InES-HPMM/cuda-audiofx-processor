@@ -85,11 +85,11 @@ class GpuSignalCopyVertex : public GpuSignalVertex {
     }
     void setSrcPtr(const std::vector<Buffer*> src_ptr, cudaGraphExec_t graph_exec) override {
         _src_ptr.set(src_ptr);
-        _node->updateSrcPtr(_src_ptr.getDataMod(), graph_exec);
+        _node->updateExecSrcPtr(_src_ptr.getDataMod(), graph_exec);
     }
     void setDestPtr(std::vector<Buffer*> dest_ptr, cudaGraphExec_t graph_exec) override {
         _dest_ptr.set(dest_ptr);
-        _node->updateDstPtr(_dest_ptr.getDataMod(), graph_exec);
+        _node->updateExecDstPtr(_dest_ptr.getDataMod(), graph_exec);
     }
     cudaGraphNode_t getProcessNode() override { return _node->getNode(); }
     cudaGraphNode_t* getProcessNodePtr() override { return _node->getNodePtr(); }
@@ -180,6 +180,7 @@ class GpuSignalGraph : public IGpuSignalGraph {
    private:
     std::vector<GpuSignalVertex*> _roots;
     std::vector<GpuSignalVertex*> _vertices;
+    std::vector<GpuSignalFxVertex*> _fx_vertices;
     std::vector<GpuSignalVertex*> _leaves;
     std::vector<Buffer*> _buffer_ptrs;
     std::vector<GpuSignalVertex*> _input_vertices;
@@ -242,6 +243,7 @@ class GpuSignalGraph : public IGpuSignalGraph {
         std::copy_if(_vertices.begin(), _vertices.end(), std::back_inserter(orphans), [](GpuSignalVertex* vertex) { return vertex->getParents().empty(); });
         std::transform(orphans.begin(), orphans.end(), std::back_inserter(orphans_i), [](GpuSignalVertex* vertex) { return static_cast<GpuSignalFxVertex*>(vertex); });
         std::copy(_vertices.begin(), _vertices.end(), std::back_inserter(queue));
+        std::transform(_vertices.begin(), _vertices.end(), std::back_inserter(_fx_vertices), [](GpuSignalVertex* vertex) { return static_cast<GpuSignalFxVertex*>(vertex); });
 
         for (size_t i = 0; i < _n_in_channels; i++) {
             BufferRack src_ptr(BufferSpecs(MemoryContext::HOST, n_proc_frames));
@@ -308,6 +310,9 @@ class GpuSignalGraph : public IGpuSignalGraph {
     }
 
     void process(const std::vector<float*>& dst_bufs, const std::vector<float*>& src_bufs) override {
+        for (auto vertex : _fx_vertices) {
+            vertex->getFx()->updateSoftParams(_process_graph_exec, vertex->getProcessNode());
+        }
         for (size_t i = 0; i < _input_vertices.size(); i++) {
             _input_vertices[i]->setSrcPtr({Buffer::create(src_bufs[i], BufferSpecs(MemoryContext::HOST, _n_proc_frames))}, _process_graph_exec);
         }

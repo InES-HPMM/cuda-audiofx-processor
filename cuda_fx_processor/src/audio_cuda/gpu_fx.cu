@@ -39,16 +39,33 @@ class GpuFx : public IGpuFx {
     size_t _n_proc_channels;
     size_t _n_proc_frames;
     size_t _n_proc_samples;
+    size_t _mix_ratio_param_index;
+    float _mix_ratio;
+    bool _has_soft_param_update = false;
 
     BufferRackSpecs _input_specs;
     BufferRackSpecs _output_specs;
 
+    IKernelNode* _mix_node=nullptr;
+
     virtual void allocateBuffers() = 0;
     virtual void deallocateBuffers() = 0;
+    virtual void setMixRatio(float mix_ratio, int kernel_param_index = -1) {
+        if (mix_ratio < 0.0f || mix_ratio > 1.0f) {
+            throw std::runtime_error("Mix ratio must be between 0.0 and 1.0");
+        } else if (mix_ratio == _mix_ratio) {
+            return;
+        }
+        _mix_ratio = mix_ratio;
+        _mix_node->updateKernelParamAt(kernel_param_index >= 0 ? kernel_param_index : _mix_ratio_param_index, &_mix_ratio);
+        _has_soft_param_update = true;
+    }
 
    public:
-    GpuFx(std::string name, bool has_post_processing = true) : _name(name), _has_post_processing(has_post_processing) {}
-    virtual ~GpuFx() {};
+    GpuFx(std::string name, bool has_post_processing = true, float mix_ratio = 1.0f) : _name(name), _has_post_processing(has_post_processing), _mix_ratio(mix_ratio), _mix_ratio_param_index(4) {}
+    virtual ~GpuFx() {
+        delete _mix_node;
+    };
 
     std::string getName() {
         return _name;
@@ -101,6 +118,15 @@ class GpuFx : public IGpuFx {
     }
     virtual cudaStream_t process(cudaStream_t stream, const BufferRack* dest, const BufferRack* src, cudaStreamCaptureStatus capture_status = cudaStreamCaptureStatus::cudaStreamCaptureStatusNone) = 0;
     virtual cudaStream_t postProcess(cudaStream_t stream, cudaStreamCaptureStatus capture_status = cudaStreamCaptureStatus::cudaStreamCaptureStatusNone) { return stream; }
+    virtual void setSoftParams(float mix_ratio) {
+        setMixRatio(mix_ratio);
+    }
+    virtual void updateSoftParams(cudaGraphExec_t proc_graph_node, cudaGraphNode_t child_graph_node) {
+        if (_has_soft_param_update) {
+            gpuErrChk(cudaGraphExecChildGraphNodeSetParams(proc_graph_node, child_graph_node, _process_graph));
+            _has_soft_param_update = false;
+        }
+    };
     virtual void updateBufferPtrs(cudaGraphExec_t procGraphExec, const BufferRack* dst, const BufferRack* src) { throw std::runtime_error("Not implemented"); };
     virtual void teardown() {
         deallocateBuffers();
