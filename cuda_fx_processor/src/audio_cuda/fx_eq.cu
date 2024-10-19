@@ -291,7 +291,7 @@ class BiquadBand {
     }
 };
 
-class FxBiquad : public GpuFx {
+class FxEq : public GpuFx {
    protected:
     size_t _n_channels_default;
     std::vector<BiquadBand*> _bands;
@@ -324,13 +324,13 @@ class FxBiquad : public GpuFx {
     }
 
    public:
-    FxBiquad(std::vector<IBiquadParam*> params, size_t n_channels) : GpuFx("FxEq"), _n_channels_default(n_channels) {
+    FxEq(std::vector<IBiquadParam*> params, size_t n_channels) : GpuFx("FxEq"), _n_channels_default(n_channels) {
         for (auto param : params) {
             _bands.push_back(new BiquadBand(static_cast<BiquadParam*>(param)));
         }
     }
 
-    ~FxBiquad() {
+    ~FxEq() {
         for (auto band : _bands) {
             delete band;
         }
@@ -379,13 +379,13 @@ class FxBiquad : public GpuFx {
     GpuFx* clone() override {
         std::vector<IBiquadParam*> biquad_params;
         std::transform(_bands.begin(), _bands.end(), std::back_inserter(biquad_params), [](BiquadBand* band) { return band->getParams()->clone(); });
-        return new FxBiquad(biquad_params, _n_channels_default);
+        return new FxEq(biquad_params, _n_channels_default);
     }
 };
 
 IGpuFx* IGpuFx::createBiquadEQ(IBiquadParam* param, size_t n_channels) {
-    return new FxBiquad({param}, n_channels);
+    return new FxEq({param}, n_channels);
 }
 IGpuFx* IGpuFx::createBiquadEQ(std::vector<IBiquadParam*> params, size_t n_channels) {
-    return new FxBiquad(params, n_channels);
+    return new FxEq(params, n_channels);
 }
