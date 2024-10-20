@@ -133,7 +133,7 @@ class TrtEngineImpl : public TrtEngine {
         return _buffers[_output_names[index]];
     }
 
-    void configure(size_t process_buffer_size, size_t n_input_channels, size_t n_output_channels) override {
+    void configure(size_t process_buffer_size, size_t receptive_field, size_t n_input_channels, size_t n_output_channels) override {
         _engine_name = getEngineName(_onnx_model_path.stem(), process_buffer_size);
         _engine_path = _trt_model_dir / _engine_name;
         if (n_input_channels > 1 || n_output_channels > 1) {
@@ -143,7 +143,7 @@ class TrtEngineImpl : public TrtEngine {
         spdlog::debug("Attempting to load trt engine {}", _engine_name.string());
         if (!std::filesystem::exists(_engine_path)) {
             spdlog::info("No TRT engine found at path: {}. Regenerating ... this could take a while.", (_engine_path).c_str());
-            if (!createTrtEngineFile(_onnx_model_path, _engine_path, Dims2(1, process_buffer_size))) {
+            if (!createTrtEngineFile(_onnx_model_path, _engine_path, Dims2(1, process_buffer_size + receptive_field))) {
                 throw std::runtime_error("Failed to build TRT model");
             }
         }

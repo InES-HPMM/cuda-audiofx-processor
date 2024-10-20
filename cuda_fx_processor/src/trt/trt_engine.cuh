@@ -10,7 +10,7 @@ class TrtEngine {
 
     virtual Buffer* getInputBuffer(const size_t index) = 0;
     virtual Buffer* getOutputBuffer(const size_t index) = 0;
-    virtual void configure(size_t process_buffer_size, size_t n_input_channels, size_t n_output_channels) = 0;
+    virtual void configure(size_t process_buffer_size, size_t receptive_field, size_t n_input_channels, size_t n_output_channels) = 0;
     virtual void allocate() = 0;
     virtual void setup(cudaStream_t stream) = 0;
     virtual void inference(cudaStream_t stream) = 0;

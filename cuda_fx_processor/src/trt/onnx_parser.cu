@@ -4,6 +4,7 @@
 
 #include <fstream>
 #include <gpu.cuh>
+#include <opencv2/core/cuda.hpp>
 
 #include "onnx_parser.cuh"
 using namespace nvinfer1;
