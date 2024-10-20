@@ -20,7 +20,7 @@
 
 bool ir_2i2_impulse_test() {
     IPCMSignal* ir_pcm = IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-2c.wav"));
-    IGpuFx* fx = IGpuFx::createConv2i2(ir_pcm, 1 << 16, 0, true);
+    IGpuFx* fx = IGpuFx::createConv2i2(ir_pcm, 1 << 16, 0, 1.0f);
 
     float* impulse = new float[ir_pcm->getSampleCount() * 2];
     memset(impulse, 0, ir_pcm->getSampleCount() * 2 * sizeof(float));
@@ -39,7 +39,7 @@ bool ir_2i2_impulse_test() {
 bool ir_2i1_impulse_test() {
     IPCMSignal* ir_pcm = IPCMSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav"));
     IFPSignal* ir_float = IFPSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-2c.wav"), ChannelOrder::INTERLEAVED);
-    IGpuFx* fx = IGpuFx::createConv2i1(ir_pcm, ir_pcm->getSampleCount(), 0, true);
+    IGpuFx* fx = IGpuFx::createConv2i1(ir_pcm, ir_pcm->getSampleCount(), 0, 1.0f);
 
     float* impulse = new float[ir_float->getSampleCount()];
     memset(impulse, 0, ir_float->getSampleCount() * sizeof(float));
@@ -59,7 +59,7 @@ bool ir_2i1_impulse_test() {
 bool ir_1i1_impulse_test() {
     IPCMSignal* ir_pcm = IPCMSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav"));
     IFPSignal* ir_float = IFPSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav"), ChannelOrder::INTERLEAVED);
-    IGpuFx* fx = IGpuFx::createConv1i1(ir_pcm, ir_pcm->getSampleCount(), 0, true);
+    IGpuFx* fx = IGpuFx::createConv1i1(ir_pcm, ir_pcm->getSampleCount(), 0, 1.0f);
 
     float* impulse = new float[ir_pcm->getSampleCount()];
     memset(impulse, 0, ir_pcm->getSampleCount() * sizeof(float));
@@ -269,6 +269,57 @@ bool testParallel2i2SignalGraph() {
     return res;
 }
 
+bool testParamUpdate() {
+    size_t buffer_size = 48;
+    IFPSignal* dry = IFPSignal::readFromFile(path::res("sine-sweep-48k-24b-1c.wav"), ChannelOrder::PLANAR);
+    IFPSignal* wet = IFPSignal::create(dry);
+
+    IGpuSignalGraph* graph = IGpuSignalGraph::createGpuSignalGraph();
+
+    auto fx_gate = IGpuFx::createGate(0.05, 100, 500, 50);
+    auto fx_nam = IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size);
+    auto fx_cab = IGpuFx::createConv1i1(IPCMSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav")), 1 << 12, 0, 1.0f);
+    auto fx_eq = IGpuFx::createBiquadEQ({
+        IBiquadParam::create(BiquadType::PEAK, 100, -10, 3),
+        IBiquadParam::create(BiquadType::PEAK, 500, 10, 3),
+        IBiquadParam::create(BiquadType::PEAK, 2000, -10, 3),
+        IBiquadParam::create(BiquadType::PEAK, 4000, 10, 3),
+    });
+
+    graph->add(fx_gate);
+    graph->add(fx_nam);
+    graph->add(fx_cab);
+    graph->add(fx_eq);
+    graph->setup(buffer_size, 1, 1);
+    fx_gate->setSoftParams(0);
+    fx_nam->setSoftParams(0);
+    fx_cab->setSoftParams(0);
+    fx_eq->setSoftParams(0);
+
+    int n_chunks = dry->getFrameCount() / buffer_size;
+    std::vector<float*> input_slices(1);
+    std::vector<float*> output_slices(1);
+    for (int i = 0; i < n_chunks; i++) {
+        input_slices[0] = ((float**)dry->getDataPtrMod())[0] + i * buffer_size;
+        output_slices[0] = ((float**)wet->getDataPtrMod())[0] + i * buffer_size;
+        graph->process(output_slices, input_slices);
+    }
+    wet->writeToWav(path::out("param-update-test-actual-output.wav"), BitDepth::BD_24);
+    int minimal_rmsd_offset;
+    double rmsd = getMinimalRMSD(((float**)dry->getDataPtrMod())[0], ((float**)wet->getDataPtrMod())[0], dry->getFrameCount(), 1000, &minimal_rmsd_offset);
+    bool res = true;
+    if (std::isnan(rmsd) || rmsd > 0) {
+        spdlog::error("soft-param-update-test: minimal RMSD at {} too high: {}", std::to_string(minimal_rmsd_offset), std::to_string(rmsd));
+        res = false;
+    } else {
+        spdlog::info("soft-param-update-test: minimal RMSD at {} within tolerance: {}", std::to_string(minimal_rmsd_offset), std::to_string(rmsd));
+    }
+
+    delete dry;
+    delete wet;
+    return res;
+}
+
 // int minimalRMSDStressTest() {
 //     size_t n_samples = 2000000;
 //     std::random_device rnd_device;
@@ -296,6 +347,7 @@ int main() {
         !trt_engine_test() ||
         !testGate() ||
         !testBiquadEQ() ||
+        !testParamUpdate() ||
         !testIOMap() ||
         !testLinear1i1SignalGraph() ||
         !testLinear2i2SignalGraph() ||
@@ -314,6 +366,7 @@ int main() {
     // testLinear2i2SignalGraph();
     // testParallel1i1SignalGraph();
     // testParallel2i2SignalGraph();
+    // testParamUpdate();
 
     return 0;
 }

@@ -36,6 +36,7 @@ class JackDriver : public Driver {
     std::vector<SignalChainMapping> _signal_chain_mappings;
     jack_client_t* _handle;
     std::chrono::_V2::system_clock::time_point _last_process_call;
+    bool _async;
 
     static int processCallback(jack_nframes_t n_samples, void* arg) {
         assert(arg);
@@ -109,7 +110,8 @@ class JackDriver : public Driver {
     JackDriver() {}
     ~JackDriver() {}
 
-    void start() {
+    void start(bool async) {
+        _async = async;
         jack_status_t status;
 
         spdlog::info("Starting JACK client");
@@ -142,7 +144,7 @@ class JackDriver : public Driver {
         }
 
         for (SignalChainMapping chain_map : _signal_chain_mappings) {
-            chain_map.signal_chain->setup(_buffer_size, chain_map.getInputPortCount(), chain_map.getOutputPortCount());
+            chain_map.signal_chain->setup(_buffer_size, chain_map.getInputPortCount(), chain_map.getOutputPortCount(), async);
         }
 
         errChk(jack_activate(_handle));
@@ -187,7 +189,7 @@ class JackDriver : public Driver {
             for (SignalChainMapping chain_map : _signal_chain_mappings) {
                 chain_map.signal_chain->setup(_buffer_size, chain_map.getInputPortCount(), chain_map.getOutputPortCount());
             }
-            start();
+            start(_async);
         } else {
             spdlog::warn("Jack handle not initialized. Buffer size will be set when client is started.");
         }

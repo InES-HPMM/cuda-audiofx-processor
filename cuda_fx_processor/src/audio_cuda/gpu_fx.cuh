@@ -23,9 +23,9 @@ class IBiquadParam {
 
 class IGpuFx {
    public:
-    static IGpuFx* createConv1i1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale = -18, bool force_wet_mix = false);
-    static IGpuFx* createConv2i1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale = -18, bool force_wet_mix = false);
-    static IGpuFx* createConv2i2(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale = -18, bool force_wet_mix = false);
+    static IGpuFx* createConv1i1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale = -18, float mix_ratio = 1.0f);
+    static IGpuFx* createConv2i1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale = -18, float mix_ratio = 1.0f);
+    static IGpuFx* createConv2i2(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale = -18, float mix_ratio = 1.0f);
     static IGpuFx* createPassThrough();
     static IGpuFx* createBiquadEQ(IBiquadParam* param, size_t n_channels = 1);
     static IGpuFx* createBiquadEQ(std::vector<IBiquadParam*> params, size_t n_channels = 1);
@@ -57,6 +57,8 @@ class IGpuFx {
     virtual cudaStream_t setup(cudaStream_t stream, cudaStreamCaptureStatus capture_status = cudaStreamCaptureStatus::cudaStreamCaptureStatusNone) = 0;
     virtual cudaStream_t process(cudaStream_t stream, const BufferRack* dest, const BufferRack* src, cudaStreamCaptureStatus capture_status = cudaStreamCaptureStatus::cudaStreamCaptureStatusNone) = 0;
     virtual cudaStream_t postProcess(cudaStream_t stream, cudaStreamCaptureStatus capture_status = cudaStreamCaptureStatus::cudaStreamCaptureStatusNone) = 0;
+    virtual void setSoftParams(float mix_ratio) = 0;
+    virtual void updateSoftParams(cudaGraphExec_t proc_graph_node, cudaGraphNode_t child_graph_node) = 0;
     virtual void updateBufferPtrs(cudaGraphExec_t procGraphExec, const BufferRack* dst, const BufferRack* src) = 0;
     virtual void teardown() = 0;
     virtual IGpuFx* clone() = 0;

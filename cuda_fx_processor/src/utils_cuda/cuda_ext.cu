@@ -33,49 +33,49 @@ bool copyToDevicePtr(const void* dest, const void* src, size_t size, cudaStream_
 }
 
 void logCudaGraphNodes(cudaGraph_t graph, spdlog::level::level_enum log_level, std::string parent_node_id) {
-        cudaGraphNode_t* nodes = nullptr;
-        size_t node_count = 0;
-        gpuErrChk(cudaGraphGetNodes(graph, nodes, &node_count));  // get number of Nodes
-        if (node_count > 0) {
-            nodes = new cudaGraphNode_t[node_count];
-            gpuErrChk(cudaGraphGetNodes(graph, nodes, &node_count));  // get Nodes
-            for (size_t i = 0; i < node_count; i++) {
-                cudaGraphNodeType type;
-                gpuErrChk(cudaGraphNodeGetType(nodes[i], &type));
-                std::string node_id = parent_node_id + std::to_string(i);
-                switch (type) {
-                    case cudaGraphNodeTypeKernel:
-                        spdlog::log(log_level, "Node {} Type: Kernel", node_id);
-                        break;
-                    case cudaGraphNodeTypeMemcpy:
-                        spdlog::log(log_level, "Node {} Type: Memcpy", node_id);
-                        break;
-                    case cudaGraphNodeTypeMemset:
-                        spdlog::log(log_level, "Node {} Type: Memset", node_id);
-                        break;
-                    case cudaGraphNodeTypeHost:
-                        spdlog::log(log_level, "Node {} Type: Host", node_id);
-                        break;
-                    case cudaGraphNodeTypeGraph:
-                        cudaGraph_t child_graph;
-                        cudaGraphChildGraphNodeGetGraph(nodes[i], &child_graph);
-                        logCudaGraphNodes(child_graph, log_level, node_id + "-");
-                        break;
-                    case cudaGraphNodeTypeEmpty:
-                        spdlog::log(log_level, "Node {} Type: Empty", node_id);
-                        break;
-                    case cudaGraphNodeTypeEventRecord:
-                        spdlog::log(log_level, "Node {} Type: EventRecord", node_id);
-                        break;
-                    default:
-                        spdlog::log(log_level, "Node {} Type: Unknown", node_id);
-                        break;
-                }
+    cudaGraphNode_t* nodes = nullptr;
+    size_t node_count = 0;
+    gpuErrChk(cudaGraphGetNodes(graph, nodes, &node_count));  // get number of Nodes
+    if (node_count > 0) {
+        nodes = new cudaGraphNode_t[node_count];
+        gpuErrChk(cudaGraphGetNodes(graph, nodes, &node_count));  // get Nodes
+        for (size_t i = 0; i < node_count; i++) {
+            cudaGraphNodeType type;
+            gpuErrChk(cudaGraphNodeGetType(nodes[i], &type));
+            std::string node_id = parent_node_id + std::to_string(i);
+            switch (type) {
+                case cudaGraphNodeTypeKernel:
+                    spdlog::log(log_level, "Node {} Type: Kernel", node_id);
+                    break;
+                case cudaGraphNodeTypeMemcpy:
+                    spdlog::log(log_level, "Node {} Type: Memcpy", node_id);
+                    break;
+                case cudaGraphNodeTypeMemset:
+                    spdlog::log(log_level, "Node {} Type: Memset", node_id);
+                    break;
+                case cudaGraphNodeTypeHost:
+                    spdlog::log(log_level, "Node {} Type: Host", node_id);
+                    break;
+                case cudaGraphNodeTypeGraph:
+                    cudaGraph_t child_graph;
+                    cudaGraphChildGraphNodeGetGraph(nodes[i], &child_graph);
+                    logCudaGraphNodes(child_graph, log_level, node_id + "-");
+                    break;
+                case cudaGraphNodeTypeEmpty:
+                    spdlog::log(log_level, "Node {} Type: Empty", node_id);
+                    break;
+                case cudaGraphNodeTypeEventRecord:
+                    spdlog::log(log_level, "Node {} Type: EventRecord", node_id);
+                    break;
+                default:
+                    spdlog::log(log_level, "Node {} Type: Unknown", node_id);
+                    break;
             }
-        } else {
-            spdlog::warn("Graph {} No nodes have been recorded to graph", parent_node_id);
         }
+    } else {
+        spdlog::warn("Graph {} No nodes have been recorded to graph", parent_node_id);
     }
+}
 
 std::vector<size_t> getOptionalDefaultChannelMapping(std::vector<size_t> channel_mapping, size_t n_channels) {
     if (channel_mapping.empty()) {
@@ -88,6 +88,8 @@ std::vector<size_t> getOptionalDefaultChannelMapping(std::vector<size_t> channel
 class KernelNode : public IKernelNode {
    protected:
     cudaKernelNodeParams _params;
+
+    void setKernelParamAt(int index, void* param) { _params.kernelParams[index] = param; }
 
    public:
     KernelNode(dim3 n_blocks, dim3 n_thread, size_t sharedMem, void* kernel, void** args) {
@@ -119,12 +121,17 @@ class KernelNode : public IKernelNode {
         gpuErrChk(cudaGraphAddKernelNode(&_node, graph, dependencies, n_dependencies, &_params));
     }
 
-    void update(cudaGraphExec_t graph_exec) override {
+    void updateExec(cudaGraphExec_t graph_exec) override {
         gpuErrChk(cudaGraphExecKernelNodeSetParams(graph_exec, _node, &_params));
     }
-    void updateKernelParamAt(int index, void* param, cudaGraphExec_t graph_exec) override {
-        _params.kernelParams[index] = param;
-        if (graph_exec) update(graph_exec);
+    void updateExecKernelParamAt(int index, void* param, cudaGraphExec_t graph_exec) override {
+        setKernelParamAt(index, param);
+        if (graph_exec) updateExec(graph_exec);
+    }
+    void updateKernelParamAt(int index, void* param) {
+        setKernelParamAt(index, param);
+        gpuErrChk(cudaGraphKernelNodeSetParams(_node, &_params));
+        gpuErrChk(cudaGraphKernelNodeGetParams(_node, &_params));  // for some reason you need to retreive the params after setting them, to enable subsequent updates
     }
 };
 
@@ -133,12 +140,13 @@ IKernelNode* IKernelNode::create(dim3 n_blocks, dim3 n_thread, size_t sharedMem,
     if (graph) instance->addToGraph(graph, dependencies, n_dependencies);
     return instance;
 }
-void IKernelNode::launchOrRecord(dim3 n_blocks, dim3 n_thread, size_t sharedMem, void* kernel, void** args, cudaStream_t stream, IKernelNode* instance, cudaStreamCaptureStatus capture_status) {
+void IKernelNode::launchOrRecord(dim3 n_blocks, dim3 n_thread, size_t sharedMem, void* kernel, void** args, cudaStream_t stream, IKernelNode** instance, cudaStreamCaptureStatus capture_status) {
     if (stream && capture_status == cudaStreamCaptureStatus::cudaStreamCaptureStatusNone) {
         gpuErrChk(cudaLaunchKernel(kernel, n_blocks, n_thread, args, sharedMem, stream));
+        delete[] args;
     } else {
-        instance = new KernelNode(n_blocks, n_thread, sharedMem, kernel, args);
-        instance->addToGraph(stream);
+        *instance = new KernelNode(n_blocks, n_thread, sharedMem, kernel, args);
+        (*instance)->addToGraph(stream);
     }
 }
 
@@ -147,6 +155,15 @@ class MemCpyNode : public IMemCpyNode {
     cudaMemcpy3DParms _params;
     const void* _src;
     void* _dst;
+
+    void setSrcPtr(const void* src) {
+        _src = src;
+        _params.srcPtr.ptr = (void*)src;
+    }
+    void setDstPtr(void* dst) {
+        _dst = dst;
+        _params.dstPtr.ptr = dst;
+    }
 
    public:
     MemCpyNode(void* dst, const void* src) : _src(src), _dst(dst) {}
@@ -170,23 +187,32 @@ class MemCpyNode : public IMemCpyNode {
         gpuErrChk(cudaGraphMemcpyNodeGetParams(_node, &_params));  // adding the node to the graph seems to enrich the params with some additional info which we need to retreive, to enable subsequent updates
     }
 
-    void update(cudaGraphExec_t graph_exec) override {
+    void updateExec(cudaGraphExec_t graph_exec) override {
         gpuErrChk(cudaGraphExecMemcpyNodeSetParams(graph_exec, _node, &_params));
     }
 
-    virtual void updateSrcPtr(const void* src, cudaGraphExec_t graph_exec = nullptr) override {
-        _src = src;
-        _params.srcPtr.ptr = (void*)src;
-        cudaGraphMemcpyNodeSetParams(_node, &_params);
-        if (graph_exec) update(graph_exec);
+    virtual void updateSrcPtr(const void* src) override {
+        setSrcPtr(src);
+        gpuErrChk(cudaGraphMemcpyNodeSetParams(_node, &_params));
+        gpuErrChk(cudaGraphMemcpyNodeGetParams(_node, &_params));  // for some reason you need to retreive the params after setting them, to enable subsequent updates
     }
 
-    virtual void updateDstPtr(void* dst, cudaGraphExec_t graph_exec = nullptr) override {
-        _dst = dst;
-        _params.dstPtr.ptr = dst;
-        cudaGraphMemcpyNodeSetParams(_node, &_params);
-        if (graph_exec) update(graph_exec);
+    virtual void updateDstPtr(void* dst) override {
+        setDstPtr(dst);
+        gpuErrChk(cudaGraphMemcpyNodeSetParams(_node, &_params));
+        gpuErrChk(cudaGraphMemcpyNodeGetParams(_node, &_params));  // for some reason you need to retreive the params after setting them, to enable subsequent updates
     }
+
+    virtual void updateExecSrcPtr(const void* src, cudaGraphExec_t graph_exec = nullptr) override {
+        setSrcPtr(src);
+        if (graph_exec) updateExec(graph_exec);
+    }
+
+    virtual void updateExecDstPtr(void* dst, cudaGraphExec_t graph_exec = nullptr) override {
+        setDstPtr(dst);
+        if (graph_exec) updateExec(graph_exec);
+    }
+
     virtual const void* getSrcPtr() { return _src; }
     virtual void* getDstPtr() { return _dst; }
 };
@@ -210,12 +236,12 @@ IMemCpyNode* IMemCpyNode::create1D(void* dst, const void* src, size_t element_wi
     if (graph) instance->addToGraph(graph, dependencies, n_dependencies);
     return instance;
 }
-void IMemCpyNode::launchOrRecord1D(void* dst, const void* src, size_t element_width, size_t n_elements, cudaMemcpyKind kind, cudaStream_t stream, IMemCpyNode* instance, cudaStreamCaptureStatus capture_status) {
+void IMemCpyNode::launchOrRecord1D(void* dst, const void* src, size_t element_width, size_t n_elements, cudaMemcpyKind kind, cudaStream_t stream, IMemCpyNode** instance, cudaStreamCaptureStatus capture_status) {
     if (stream && capture_status == cudaStreamCaptureStatus::cudaStreamCaptureStatusNone) {
         gpuErrChk(cudaMemcpyAsync(dst, src, n_elements * element_width, kind, stream));
     } else {
-        instance = new MemCpy1DNode(dst, src, element_width, n_elements, kind);
-        instance->addToGraph(stream);
+        *instance = new MemCpy1DNode(dst, src, element_width, n_elements, kind);
+        (*instance)->addToGraph(stream);
     }
 }
 
@@ -237,12 +263,12 @@ IMemCpyNode* IMemCpyNode::create2D(void* dst, size_t dpitch, const void* src, si
     if (graph) instance->addToGraph(graph, dependencies, n_dependencies);
     return instance;
 }
-void IMemCpyNode::launchOrRecord2D(void* dst, size_t dpitch, const void* src, size_t spitch, size_t element_width, size_t n_elements, cudaMemcpyKind kind, cudaStream_t stream, IMemCpyNode* instance, cudaStreamCaptureStatus capture_status) {
+void IMemCpyNode::launchOrRecord2D(void* dst, size_t dpitch, const void* src, size_t spitch, size_t element_width, size_t n_elements, cudaMemcpyKind kind, cudaStream_t stream, IMemCpyNode** instance, cudaStreamCaptureStatus capture_status) {
     if (stream && capture_status == cudaStreamCaptureStatus::cudaStreamCaptureStatusNone) {
         gpuErrChk(cudaMemcpy2DAsync(dst, dpitch, src, spitch, element_width, n_elements, kind, stream));
     } else {
-        instance = new MemCpy2DNode(dst, dpitch, src, spitch, element_width, n_elements, kind);
-        instance->addToGraph(stream);
+        *instance = new MemCpy2DNode(dst, dpitch, src, spitch, element_width, n_elements, kind);
+        (*instance)->addToGraph(stream);
     }
 }
 
@@ -302,26 +328,41 @@ class IMultiMemCpyNodeWrapper : public MemCpyNode {
         gpuErrChk(cudaGraphAddChildGraphNode(&_child_graph_node, graph, dependencies, n_dependencies, _child_graph));
     }
 
-    void update(cudaGraphExec_t graph_exec) override {
-        throw std::runtime_error("Updating MemCpy2d nodes of an instantiated graph doesn't seem to work, even if I don't see which exec update limitation I'm violating");
+    void updateExec(cudaGraphExec_t graph_exec) override {
+        throw std::runtime_error("Updating MemCpy2d nodes of an instantiated graph doesn't seem to work, even if I don't see which exec updateExec limitation I'm violating");
         gpuErrChk(cudaGraphExecChildGraphNodeSetParams(graph_exec, _child_graph_node, _child_graph));
     }
 
-    virtual void updateSrcPtr(const void* src, cudaGraphExec_t graph_exec = nullptr) override {
+    virtual void updateSrcPtr(const void* src) override {
         _src = src;
         for (size_t i = 0; i < _nodes.size(); i++) {
             _nodes[i]->updateSrcPtr(get_src_ptr(src, i));
         }
-        if (graph_exec) update(graph_exec);
     }
 
-    virtual void updateDstPtr(void* dst, cudaGraphExec_t graph_exec = nullptr) override {
+    virtual void updateDstPtr(void* dst) override {
         _dst = dst;
         for (size_t i = 0; i < _nodes.size(); i++) {
             auto prt = get_dst_ptr(dst, i);
             _nodes[i]->updateDstPtr(prt);
         }
-        if (graph_exec) update(graph_exec);
+    }
+
+    virtual void updateExecSrcPtr(const void* src, cudaGraphExec_t graph_exec = nullptr) override {
+        _src = src;
+        for (size_t i = 0; i < _nodes.size(); i++) {
+            _nodes[i]->updateExecSrcPtr(get_src_ptr(src, i));
+        }
+        if (graph_exec) updateExec(graph_exec);
+    }
+
+    virtual void updateExecDstPtr(void* dst, cudaGraphExec_t graph_exec = nullptr) override {
+        _dst = dst;
+        for (size_t i = 0; i < _nodes.size(); i++) {
+            auto prt = get_dst_ptr(dst, i);
+            _nodes[i]->updateExecDstPtr(prt);
+        }
+        if (graph_exec) updateExec(graph_exec);
     }
 };
 
@@ -364,7 +405,7 @@ IMemCpyNode* IMemCpyNode::createMulti(MultiMemcpyType type, void* dst, const voi
     return instance;
 }
 
-void IMemCpyNode::launchOrRecordMulti(MultiMemcpyType type, void* dst, const void* src, size_t element_width, size_t n_frames, size_t n_channels, std::vector<size_t> channel_mapping, cudaMemcpyKind kind, cudaStream_t stream, IMemCpyNode* instance, cudaStreamCaptureStatus capture_status) {
+void IMemCpyNode::launchOrRecordMulti(MultiMemcpyType type, void* dst, const void* src, size_t element_width, size_t n_frames, size_t n_channels, std::vector<size_t> channel_mapping, cudaMemcpyKind kind, cudaStream_t stream, IMemCpyNode** instance, cudaStreamCaptureStatus capture_status) {
     channel_mapping = getOptionalDefaultChannelMapping(channel_mapping, n_channels);
     IMultiMemCpyNodeWrapper* node = static_cast<IMultiMemCpyNodeWrapper*>(IMemCpyNode::createMulti(type, dst, src, element_width, n_frames, n_channels, channel_mapping, kind));
     if (stream && capture_status == cudaStreamCaptureStatus::cudaStreamCaptureStatusNone) {
@@ -378,7 +419,7 @@ void IMemCpyNode::launchOrRecordMulti(MultiMemcpyType type, void* dst, const voi
         std::for_each(streams.begin(), streams.end(), cudaStreamDestroy);
         delete node;
     } else {
-        instance = node;
-        instance->addToGraph(stream);
+        *instance = node;
+        (*instance)->addToGraph(stream);
     }
 }

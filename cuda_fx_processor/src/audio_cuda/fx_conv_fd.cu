@@ -5,6 +5,7 @@
 #include <coding.cuh>
 #include <cuda_ext.cuh>
 #include <gpu.cuh>
+#include <kernels.cuh>
 #include <log.hpp>
 #include <math_ext.hpp>
 #include <operators.cuh>
@@ -74,31 +75,39 @@ __global__ static void f2fff2_pointwiseAdd(float2* dst, float* src1x, float* src
     }
 }
 
+__global__ static void f2fff2_mix_residual(float2* dst, float2 src1, float* src2_x, float* src2_y, const float2* src2_residual, size_t n, float ratio) {
+    auto stride = gridDim * blockDim;
+    auto offset = blockDim * blockIdx + threadIdx;
+
+    for (auto s = offset.x; s < n; s += stride.x) {
+        dst[s].x = src1.x * (1.0f - ratio) + (src2_x[s] + src2_residual[s].x) * ratio;
+        dst[s].y = src1.y * (1.0f - ratio) + (src2_y[s] + src2_residual[s].y) * ratio;
+    }
+}
+
+__global__ static void f2f2f2_mix_residual(float2* dst, float2* src1, float2* src2, const float2* src2_residual, size_t n, float ratio) {
+    auto stride = gridDim * blockDim;
+    auto offset = blockDim * blockIdx + threadIdx;
+
+    for (auto s = offset.x; s < n; s += stride.x) {
+        dst[s] = src1[s] * (1.0f - ratio) + (src2[s] + src2_residual[s]) * ratio;
+    }
+}
+__global__ static void fff_mix_residual(float* dst, const float* src1, const float* src2, const float* src2_residual, size_t n, float ratio) {
+    auto stride = gridDim * blockDim;
+    auto offset = blockDim * blockIdx + threadIdx;
+
+    for (auto s = offset.x; s < n; s += stride.x) {
+        dst[s] = src1[s] * (1.0f - ratio) + (src2[s] + src2_residual[s]) * ratio;
+    }
+}
+
 __global__ static void fff_pointwiseAdd(float* dst, float* src1, const float* src2, size_t n) {
     auto stride = gridDim * blockDim;
     auto offset = blockDim * blockIdx + threadIdx;
 
     for (auto s = offset.x; s < n; s += stride.x) {
         dst[s] = src1[s] + src2[s];
-    }
-}
-
-__global__ static void f2f2f2_mix(float2* dst, const float2* src1, const float2* src2, size_t n, float ratio) {
-    auto stride = gridDim * blockDim;
-    auto offset = blockDim * blockIdx + threadIdx;
-
-    for (auto s = offset.x; s < n; s += stride.x) {
-        dst[s].x = src1[s].x * (1 - ratio) + src2[s].x * ratio;
-        dst[s].y = src1[s].y * (1 - ratio) + src2[s].y * ratio;
-    }
-}
-
-__global__ static void fff_mix(float* dst, const float* src1, const float* src2, size_t n, float ratio) {
-    auto stride = gridDim * blockDim;
-    auto offset = blockDim * blockIdx + threadIdx;
-
-    for (auto s = offset.x; s < n; s += stride.x) {
-        dst[s] = src1[s] * (1 - ratio) + src2[s] * ratio;
     }
 }
 
@@ -122,11 +131,9 @@ class FxConvFd : public GpuFx {
     size_t _fft_size;
     size_t _fft_size_non_redundant;
     int _ir_db_scale;
-    float _mix_ratio;
     bool _force_wet_mix;
 
     IMemCpyNode* _src_node = nullptr;
-    IKernelNode* _dest_node = nullptr;
     char* _ir_byte_buf = nullptr;
 
     float getIRAttenuationFactor() const {
@@ -142,7 +149,7 @@ class FxConvFd : public GpuFx {
     virtual cudaStream_t _process(cudaStream_t stream, float* src, const float* dst, cudaStreamCaptureStatus capture_status) = 0;
 
    public:
-    FxConvFd(std::string name, IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, bool force_wet_mix) : GpuFx(name), _nBlocks(256), _nThreads(256), _nSharedMem(0), _ir_signal(ir_signal), _ir_db_scale(ir_db_scale), _mix_ratio(0.5), _force_wet_mix(force_wet_mix) {
+    FxConvFd(std::string name, IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) : GpuFx(name, true, mix_ratio), _nBlocks(256), _nThreads(256), _nSharedMem(0), _ir_signal(ir_signal), _ir_db_scale(ir_db_scale) {
         if (max_ir_size == 0) {
             max_ir_size = _ir_signal->getFrameCount();
         }
@@ -165,8 +172,8 @@ class FxConvFd : public GpuFx {
     }
 
     void updateBufferPtrs(cudaGraphExec_t procGraphExec, const BufferRack* dst, const BufferRack* src) override {
-        _src_node->updateSrcPtr(src->getDataMod(), procGraphExec);
-        _dest_node->updateKernelParamAt(0, dst->getDataMod(), procGraphExec);
+        _src_node->updateExecSrcPtr(src->getDataMod(), procGraphExec);
+        _mix_node->updateExecKernelParamAt(0, dst->getDataMod(), procGraphExec);
     }
 
     cudaStream_t process(cudaStream_t stream, const BufferRack* dst, const BufferRack* src, cudaStreamCaptureStatus capture_status) override {
@@ -175,7 +182,6 @@ class FxConvFd : public GpuFx {
 
     virtual void teardown() override {
         if (_src_node) delete _src_node;
-        if (_dest_node) delete _dest_node;
         GpuFx::teardown();
     }
 };
@@ -220,7 +226,7 @@ class FxConvFd1c1 : public FxConvFd {
 
     cudaStream_t _process(cudaStream_t stream, float* dst, const float* src, cudaStreamCaptureStatus capture_status) override {
         // copy input as contiguous _n_proc_frames * float real signal into complex buffer to enable in-place fft
-        IMemCpyNode::launchOrRecord1D(_sig_fft, src, sizeof(float), _n_proc_frames, cudaMemcpyDeviceToDevice, stream, _src_node, capture_status);
+        IMemCpyNode::launchOrRecord1D(_sig_fft, src, sizeof(float), _n_proc_frames, cudaMemcpyDeviceToDevice, stream, &_src_node, capture_status);
 
         cufftSetStream(_plan_r2c, stream);
         cufftExecR2C(_plan_r2c, (cufftReal*)_sig_fft, _sig_fft);
@@ -234,20 +240,15 @@ class FxConvFd1c1 : public FxConvFd {
         // output is _fft_size * float contiguous real signal, with the other half of the complex buffer being irrelevant
         cufftExecC2R(_plan_c2r, _sig_fft, (cufftReal*)_sig_fft);
 
-        if (_force_wet_mix) {
-            // if the fx should always produce a 100% wet output (e.g. amp cab ir), we can skip the mixing step and write the sum of the output and residual directly to the dst buffer
-            IKernelNode::launchOrRecord(1, _n_proc_frames, 0, (void*)fff_pointwiseAdd, new void*[4]{&dst, &_sig_fft, &_residual_td, &_n_proc_frames}, stream, _dest_node, capture_status);
-        } else {
-            // combine convolution output with residual and write to dst buffer
-            fff_pointwiseAdd<<<1, _n_proc_frames, 0, stream>>>(_wet_td, (float*)_sig_fft, _residual_td, _n_proc_frames);
-            // mix dry and wet signal and write to dst buffer
-            IKernelNode::launchOrRecord(1, _n_proc_frames, 0, (void*)fff_mix, new void*[5]{&dst, &src, &_wet_td, &_n_proc_frames, &_mix_ratio}, stream, _dest_node, capture_status);
-        }
+        // combine convolution output with residual and mix dry and wet signal
+        _mix_ratio_param_index = 5;
+        IKernelNode::launchOrRecord(1, _n_proc_frames, 0, (void*)fff_mix_residual, new void*[6]{&dst, &src, &_sig_fft, &_residual_td, &_n_proc_frames, &_mix_ratio}, stream, &_mix_node, capture_status);
+
         return stream;
     }
 
    public:
-    FxConvFd1c1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, bool force_wet_mix) : FxConvFd("FxConvFd1c1", ir_signal, max_ir_size, ir_db_scale, force_wet_mix) {
+    FxConvFd1c1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) : FxConvFd("FxConvFd1c1", ir_signal, max_ir_size, ir_db_scale, mix_ratio) {
         if (_ir_signal->getChannelCount() > 1) {
             spdlog::warn("IR given to {} file is not mono. Only the first channel will be used.", _name);
         }
@@ -297,8 +298,8 @@ class FxConvFd1c1 : public FxConvFd {
     }
 };
 
-IGpuFx* IGpuFx::createConv1i1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, bool force_wet_mix) {
-    return new FxConvFd1c1(ir_signal, max_ir_size, ir_db_scale, force_wet_mix);
+IGpuFx* IGpuFx::createConv1i1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) {
+    return new FxConvFd1c1(ir_signal, max_ir_size, ir_db_scale, mix_ratio);
 }
 
 class FxConvFd2c1 : public FxConvFd {
@@ -343,7 +344,7 @@ class FxConvFd2c1 : public FxConvFd {
         // pack stereo channels into real and img part of complex struct and perform fft both simultaneously
         // https://web.archive.org/web/20180312110051/http://www.engineeringproductivitytools.com/stuff/T0001/PT10.HTM
         // since the type cufftComplex is a struct with two float members, we can simply copy our float2 buffer into the cufftComplex buffer
-        IMemCpyNode::launchOrRecord1D(_sig_fft, src, sizeof(float2), _n_proc_frames, cudaMemcpyDeviceToDevice, stream, _src_node, capture_status);
+        IMemCpyNode::launchOrRecord1D(_sig_fft, src, sizeof(float2), _n_proc_frames, cudaMemcpyDeviceToDevice, stream, &_src_node, capture_status);
         cufftExecC2C(_plan_c2c, _sig_fft, _sig_fft, CUFFT_FORWARD);
 
         // Convolution (Colplex Multiplication in Frequency Domain) (scaling is needed to retain unity gain in time domain after inverse fft)
@@ -354,21 +355,15 @@ class FxConvFd2c1 : public FxConvFd {
         // Inverse FFT
         cufftExecC2C(_plan_c2c, _sig_fft, _sig_fft, CUFFT_INVERSE);
 
-        if (_force_wet_mix) {
-            // if the fx should always produce a 100% wet output (e.g. amp cab ir), we can skip the mixing step and write the sum of the output and residual directly to the dst buffer
-            IKernelNode::launchOrRecord(1, _n_proc_frames, 0, (void*)f2f2f2_pointwiseAdd, new void*[4]{&dst, &_sig_fft, &_residual, &_n_proc_frames}, stream, _dest_node, capture_status);
-        } else {
-            // combine convolution output with residual and write to dst buffer
-            f2f2f2_pointwiseAdd<<<1, _n_proc_frames, 0, stream>>>(_wet, _sig_fft, _residual, _n_proc_frames);
-            // mix dry and wet signal and write to dst buffer
-            IKernelNode::launchOrRecord(1, _n_proc_frames, 0, (void*)f2f2f2_mix, new void*[5]{&dst, &src, &_wet, &_n_proc_frames, &_mix_ratio}, stream, _dest_node, capture_status);
-        }
+        // combine convolution output with residual and mix dry and wet signal
+        _mix_ratio_param_index = 5;
+        IKernelNode::launchOrRecord(1, _n_proc_frames, 0, (void*)f2f2f2_mix_residual, new void*[6]{&dst, &src, &_sig_fft, &_residual, &_n_proc_frames, &_mix_ratio}, stream, &_mix_node, capture_status);
 
         return stream;
     }
 
    public:
-    FxConvFd2c1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, bool force_wet_mix) : FxConvFd("FxConvFd2c1", ir_signal, max_ir_size, ir_db_scale, force_wet_mix) {
+    FxConvFd2c1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) : FxConvFd("FxConvFd2c1", ir_signal, max_ir_size, ir_db_scale, mix_ratio) {
         if (_ir_signal->getChannelCount() > 1) {
             spdlog::warn("IR file given to {} is not mono. Only the first channel will be used.", _name);
         }
@@ -423,8 +418,8 @@ class FxConvFd2c1 : public FxConvFd {
         return new FxConvFd2c1(_ir_signal->clone(), _fft_size, _ir_db_scale, _force_wet_mix);
     }
 };
-IGpuFx* IGpuFx::createConv2i1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, bool force_wet_mix) {
-    return new FxConvFd2c1(ir_signal, max_ir_size, ir_db_scale, force_wet_mix);
+IGpuFx* IGpuFx::createConv2i1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) {
+    return new FxConvFd2c1(ir_signal, max_ir_size, ir_db_scale, mix_ratio);
 }
 
 class FxConvFd2c2 : public FxConvFd {
@@ -486,7 +481,7 @@ class FxConvFd2c2 : public FxConvFd {
         // pack stereo channels into real and img part of complex struct and perform fft both simultaneously
         // https://web.archive.org/web/20180312110051/http://www.engineeringproductivitytools.com/stuff/T0001/PT10.HTM
         // since the type cufftComplex is a struct with two float members, we can simply copy our float2 buffer into the cufftComplex buffer
-        IMemCpyNode::launchOrRecord1D(_sig_fft_packed, src, sizeof(float2), _n_proc_frames, cudaMemcpyDeviceToDevice, stream, _src_node, capture_status);
+        IMemCpyNode::launchOrRecord1D(_sig_fft_packed, src, sizeof(float2), _n_proc_frames, cudaMemcpyDeviceToDevice, stream, &_src_node, capture_status);
         cufftExecC2C(_plan_c2c, _sig_fft_packed, _sig_fft_packed, CUFFT_FORWARD);
         ccc_unpackCto2C<<<4, 768, 0, stream>>>(_sigFFT.left, _sigFFT.right, _sig_fft_packed, _fft_size);
 
@@ -500,21 +495,15 @@ class FxConvFd2c2 : public FxConvFd {
         cufftExecC2R(_plan_c2r, _sigFFT.left, (cufftReal*)_sigFFT.left);
         cufftExecC2R(_plan_c2r, _sigFFT.right, (cufftReal*)_sigFFT.right);
 
-        if (_force_wet_mix) {
-            // if the fx should always produce a 100% wet output (e.g. amp cab ir), we can skip the mixing step and write the sum of the output and residual directly to the dst buffer
-            IKernelNode::launchOrRecord(1, _n_proc_frames, 0, (void*)f2fff2_pointwiseAdd, new void*[5]{&dst, &_sigFFT.left, &_sigFFT.right, &_residual, &_n_proc_frames}, stream, _dest_node, capture_status);
-        } else {
-            // combine convolution output with residual and write to dst buffer
-            f2fff2_pointwiseAdd<<<1, _n_proc_frames, 0, stream>>>(_wet, (float*)_sigFFT.left, (float*)_sigFFT.right, _residual, _n_proc_frames);
-            // mix dry and wet signal and write to dst buffer
-            IKernelNode::launchOrRecord(1, _n_proc_frames, 0, (void*)f2f2f2_mix, new void*[5]{&dst, &src, &_wet, &_n_proc_frames, &_mix_ratio}, stream, _dest_node, capture_status);
-        }
+        // combine convolution output with residual and mix dry and wet signal
+        _mix_ratio_param_index = 6;
+        IKernelNode::launchOrRecord(1, _n_proc_frames, 0, (void*)f2fff2_mix_residual, new void*[7]{&dst, &src, &_sigFFT.left, &_sigFFT.right, &_residual, &_n_proc_frames, &_mix_ratio}, stream, &_mix_node, capture_status);
 
         return stream;
     }
 
    public:
-    FxConvFd2c2(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, bool force_wet_mix) : FxConvFd("FxConvFd2c2", ir_signal, max_ir_size, ir_db_scale, force_wet_mix) {
+    FxConvFd2c2(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) : FxConvFd("FxConvFd2c2", ir_signal, max_ir_size, ir_db_scale, mix_ratio) {
         if (_ir_signal->getChannelCount() < 2) {
             throw std::runtime_error("IR file given to {} has less than two channels. Stereo IRs are required for this fx.");
         } else if (_ir_signal->getChannelCount() > 2) {
@@ -570,6 +559,6 @@ class FxConvFd2c2 : public FxConvFd {
     }
 };
 
-IGpuFx* IGpuFx::createConv2i2(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, bool force_wet_mix) {
-    return new FxConvFd2c2(ir_signal, max_ir_size, ir_db_scale, force_wet_mix);
+IGpuFx* IGpuFx::createConv2i2(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) {
+    return new FxConvFd2c2(ir_signal, max_ir_size, ir_db_scale, mix_ratio);
 }

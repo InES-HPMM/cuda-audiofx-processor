@@ -13,8 +13,6 @@ add_library(${BINARY_NAME}
     signal_graph.cpp
     driver.hpp
     jack_driver.cpp
-    jack_driver_async.cpp
-    file_driver.cpp
     signal_driver.cpp
 )
 

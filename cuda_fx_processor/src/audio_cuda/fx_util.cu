@@ -107,9 +107,8 @@ class FxMixSegment : public FxMixTool {
     }
 
     void updateBufferPtrs(cudaGraphExec_t procGraphExec, const BufferRack* dst, const BufferRack* src) override {
-        throw std::runtime_error("FxMixSegment: updateBufferPtrs not implemented");
-        // static_cast<IKernelNode*>(_node)->updateKernelParamAt(1, (void*)src->getDataListConst());
-        // static_cast<IKernelNode*>(_node)->updateKernelParamAt(0, dst->getDataMod(), procGraphExec);
+        static_cast<IKernelNode*>(_node)->updateExecKernelParamAt(1, (void*)src->getDataListConst());
+        static_cast<IKernelNode*>(_node)->updateExecKernelParamAt(0, dst->getDataMod(), procGraphExec);
     }
 
     cudaStream_t process(cudaStream_t stream, const BufferRack* dst, const BufferRack* src, cudaStreamCaptureStatus capture_status) override {
@@ -118,7 +117,8 @@ class FxMixSegment : public FxMixTool {
 
         // TODO: Pointers to segmented buffers need to be on the device as well for a kernel to work with. Remove buffer params from process streams and use the updateBufferPtrs method at the start and whenever subsequently necessary.
         gpuErrChk(cudaMemcpyAsync(_src_data, src_buffers, sizeof(float*) * _n_lanes, cudaMemcpyHostToDevice, stream));
-        IKernelNode::launchOrRecord(dim3(1), dim3(_n_proc_frames * _n_out_channels), 0, (void*)ff_mix_segment, new void*[5]{&dst_buffer, &_src_data, &_n_lanes, &_n_out_channels, &_n_proc_frames}, stream, static_cast<IKernelNode*>(_node), capture_status);
+        auto kernel_node = static_cast<IKernelNode*>(_node);
+        IKernelNode::launchOrRecord(dim3(1), dim3(_n_proc_frames * _n_out_channels), 0, (void*)ff_mix_segment, new void*[5]{&dst_buffer, &_src_data, &_n_lanes, &_n_out_channels, &_n_proc_frames}, stream, &kernel_node, capture_status);
         return stream;
     }
 };
@@ -132,15 +132,16 @@ class FxMixInterleaved : public FxMixTool {
     FxMixInterleaved(size_t n_in_channels, size_t n_out_channels) : FxMixTool("FxMixInterleaved", n_in_channels, n_out_channels) {}
 
     void updateBufferPtrs(cudaGraphExec_t procGraphExec, const BufferRack* dst, const BufferRack* src) override {
-        static_cast<IKernelNode*>(_node)->updateKernelParamAt(1, (void*)src->getDataListConst());
-        static_cast<IKernelNode*>(_node)->updateKernelParamAt(0, dst->getDataMod(), procGraphExec);
+        static_cast<IKernelNode*>(_node)->updateExecKernelParamAt(1, (void*)src->getDataListConst());
+        static_cast<IKernelNode*>(_node)->updateExecKernelParamAt(0, dst->getDataMod(), procGraphExec);
     }
 
     cudaStream_t process(cudaStream_t stream, const BufferRack* dst, const BufferRack* src, cudaStreamCaptureStatus capture_status) override {
         auto src_buffers = src->getDataMod();
         auto dst_buffer = dst->getDataMod();
 
-        IKernelNode::launchOrRecord(dim3(1), dim3(2 * _n_proc_samples), 0, (void*)ff_mix_interleaved, new void*[5]{&dst_buffer, &src_buffers, &_n_lanes, &_n_out_channels, &_n_proc_frames}, stream, static_cast<IKernelNode*>(_node), capture_status);
+        auto kernel_node = static_cast<IKernelNode*>(_node);
+        IKernelNode::launchOrRecord(dim3(1), dim3(2 * _n_proc_samples), 0, (void*)ff_mix_interleaved, new void*[5]{&dst_buffer, &src_buffers, &_n_lanes, &_n_out_channels, &_n_proc_frames}, stream, &kernel_node, capture_status);
 
         return stream;
     }

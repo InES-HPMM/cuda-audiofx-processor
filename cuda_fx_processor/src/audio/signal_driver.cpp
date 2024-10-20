@@ -27,7 +27,7 @@ class SignalDriver : public Driver {
         delete _signal_chain;
     }
 
-    void start() override {
+    void start(bool async) override {
         _signal_chain->setup(_buffer_size, 2, 2);
         IFPSignal* output = IFPSignal::create(_buffer_size, _signal_chain->getOutputChannelCount(), SampleRate::SR_48000, ChannelOrder::PLANAR);
         _sample_rate = output->getSampleRateValue();

@@ -31,9 +31,9 @@ void test(std::vector<PerformanceMeasurement*>& measurements, IGpuFx* fx, size_t
 void stream_vs_graph(size_t process_buffer_size, size_t n_warmup, size_t n_measure, bool simulate_buffer_intervals, bool process_in_place) {
     std::vector<PerformanceMeasurement*> measurements;
     IPCMSignal* ir_pcm = IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-1c.wav"));
-    test(measurements, IGpuFx::createConv2i2(IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-2c.wav")), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
-    test(measurements, IGpuFx::createConv2i1(ir_pcm->clone(), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
-    test(measurements, IGpuFx::createConv1i1(ir_pcm->clone(), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
+    test(measurements, IGpuFx::createConv2i2(IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-2c.wav")), 1 << 17, 0, 1.0f), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
+    test(measurements, IGpuFx::createConv2i1(ir_pcm->clone(), 1 << 17, 0, 1.0f), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
+    test(measurements, IGpuFx::createConv1i1(ir_pcm->clone(), 1 << 17, 0, 1.0f), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     test(measurements, IGpuFx::createBiquadEQ(IBiquadParam::create(BiquadType::PEAK, 1000, 21, 0.6)), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     test(measurements, IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, 48), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     test(measurements, IGpuFx::createGate(0.2, 100, 5, 50), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
@@ -43,9 +43,9 @@ void stream_vs_graph(size_t process_buffer_size, size_t n_warmup, size_t n_measu
 void stream_all(size_t process_buffer_size, size_t n_warmup, size_t n_measure, bool simulate_buffer_intervals, bool process_in_place) {
     std::vector<PerformanceMeasurement*> measurements;
     IPCMSignal* ir_pcm = IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-1c.wav"));
-    // testStream(measurements, IGpuFx::createConv2i2(IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-2c.wav")), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
-    // testStream(measurements, IGpuFx::createConv2i1(ir_pcm->clone(), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
-    // testStream(measurements, IGpuFx::createConv1i1(ir_pcm->clone(), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
+    // testStream(measurements, IGpuFx::createConv2i2(IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-2c.wav")), 1 << 17, 0, 1.0f), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
+    // testStream(measurements, IGpuFx::createConv2i1(ir_pcm->clone(), 1 << 17, 0, 1.0f), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
+    // testStream(measurements, IGpuFx::createConv1i1(ir_pcm->clone(), 1 << 17, 0, 1.0f), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     // testStream(measurements, IGpuFx::createBiquadEQ(IBiquadParam::create(BiquadType::PEAK, 1000, 21, 0.6)), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     // testStream(measurements, IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, 48), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     testStream(measurements, IGpuFx::createGate(0.2, 100, 5, 50), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
@@ -56,9 +56,9 @@ void stream_all(size_t process_buffer_size, size_t n_warmup, size_t n_measure, b
 void graph_all(size_t process_buffer_size, size_t n_warmup, size_t n_measure, bool simulate_buffer_intervals, bool process_in_place) {
     std::vector<PerformanceMeasurement*> measurements;
     IPCMSignal* ir_pcm = IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-1c.wav"));
-    // testGraph(measurements, IGpuFx::createConv2i2(IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-2c.wav")), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
-    // testGraph(measurements, IGpuFx::createConv2i1(ir_pcm->clone(), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
-    // testGraph(measurements, IGpuFx::createConv1i1(ir_pcm->clone(), 1 << 17, 0, true), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
+    // testGraph(measurements, IGpuFx::createConv2i2(IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-2c.wav")), 1 << 17, 0, 1.0f), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
+    // testGraph(measurements, IGpuFx::createConv2i1(ir_pcm->clone(), 1 << 17, 0, 1.0f), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
+    // testGraph(measurements, IGpuFx::createConv1i1(ir_pcm->clone(), 1 << 17, 0, 1.0f), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     // testGraph(measurements, IGpuFx::createBiquadEQ(IBiquadParam::create(BiquadType::PEAK, 1000, 21, 0.6)), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     // testGraph(measurements, IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, 48), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);
     testGraph(measurements, IGpuFx::createGate(0.2, 100, 5, 50), process_buffer_size, n_warmup, n_measure, simulate_buffer_intervals, process_in_place);

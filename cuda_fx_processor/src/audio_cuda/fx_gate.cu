@@ -11,7 +11,7 @@ enum class NoiseGateState {
     RELEASE = 4
 };
 
-__global__ static void ff_gate(float* dst, const float* src, NoiseGateState* state, size_t* hold_time_counter, float* gain, float* threshold, float* attack_coeff, float* release_coeff, size_t* hold_time, size_t n_samples) {
+__global__ static void ff_gate(float* dst, const float* src, NoiseGateState* state, size_t* hold_time_counter, float* gain, float* threshold, float* attack_coeff, float* release_coeff, size_t* hold_time, size_t n_samples, float mix_ratio) {
     auto stride = gridDim * blockDim;
     auto offset = blockDim * blockIdx + threadIdx;
 
@@ -59,7 +59,7 @@ __global__ static void ff_gate(float* dst, const float* src, NoiseGateState* sta
                 }
                 break;
         }
-        dst[s] = src[s] * *gain;
+        dst[s] = src[s] * ((1.0f - mix_ratio) + (*gain * mix_ratio));
     }
 }
 
@@ -118,7 +118,7 @@ class FxGate : public GpuFx {
     }
 
     void configure(size_t process_buffer_size, size_t n_in_channels, size_t n_out_channels) override {
-        if (n_in_channels != 0 && n_in_channels > 1 || n_out_channels  != 0 && n_out_channels > 1) {
+        if (n_in_channels != 0 && n_in_channels > 1 || n_out_channels != 0 && n_out_channels > 1) {
             spdlog::warn("{} is a single channel effect, set n_in_channels {} and n_in_channels {} are ignored", _name, n_in_channels, n_out_channels);
         }
         GpuFx::configure(process_buffer_size, 1, 1);
@@ -136,8 +136,16 @@ class FxGate : public GpuFx {
         return stream;
     }
 
+    void updateBufferPtrs(cudaGraphExec_t procGraphExec, const BufferRack* dst, const BufferRack* src) override {
+        _mix_node->updateExecKernelParamAt(1, src->getDataMod(), procGraphExec);
+        _mix_node->updateExecKernelParamAt(0, dst->getDataMod(), procGraphExec);
+    }
+
     cudaStream_t process(cudaStream_t stream, const BufferRack* dst, const BufferRack* src, cudaStreamCaptureStatus capture_status) override {
-        ff_gate<<<1, 1, 0, stream>>>(dst->getDataMod(), src->getDataMod(), _state_ptr, _hold_time_counter_ptr, _gain_ptr, _threshold_ptr, _attack_coeff_ptr, _release_coeff_ptr, _hold_time_ptr, _n_proc_frames);
+        auto src_data = src->getDataMod();
+        auto dst_data = dst->getDataMod();
+        _mix_ratio_param_index = 10;
+        IKernelNode::launchOrRecord(1, 1, 0, (void*)ff_gate, new void*[11]{&dst_data, &src_data, &_state_ptr, &_hold_time_counter_ptr, &_gain_ptr, &_threshold_ptr, &_attack_coeff_ptr, &_release_coeff_ptr, &_hold_time_ptr, &_n_proc_frames, &_mix_ratio}, stream, &_mix_node, capture_status);
         return stream;
     }
 };
