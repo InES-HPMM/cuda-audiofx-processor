@@ -18,7 +18,7 @@ class Driver {
     static Driver* createSignalDriver();
 
     virtual ~Driver() {}
-    virtual void start() = 0;
+    virtual void start(bool async = false) = 0;
     virtual void stop() = 0;
 
     virtual void addSignalChain(ISignalGraph* chain, std::vector<std::string> inputs, std::vector<std::string> outputs) = 0;

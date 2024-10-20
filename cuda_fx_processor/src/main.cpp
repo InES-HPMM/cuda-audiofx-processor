@@ -14,7 +14,6 @@
 
 void run_jack(int timeout = 0) {
     selectGpu();
-    size_t fft_size = 1 << 17;
     size_t buffer_size = 128;
 
     Driver* driver = Driver::createJackDriver();
@@ -23,40 +22,33 @@ void run_jack(int timeout = 0) {
     IGpuSignalGraph* graph = IGpuSignalGraph::createGpuSignalGraph();
     size_t n_inputs = 2;
 
-    auto signal = IPCMSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav"));
+    graph->add(IGpuFx::createInputMap({0}));
+    auto vertex = graph->add(IGpuFx::createGate(0.2, 100, 5, 50));
+    auto fx_nam = IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size);
+    vertex = graph->add(fx_nam);
 
-    std::vector<IGpuSignalVertex*> eq_vertices;
-    for (size_t i = 0; i < n_inputs; i++) {
-        auto input_map = graph->addRoot(IGpuFx::createInputMap({0}));
-        auto vertex = graph->add({IGpuFx::createGate(0.2, 100, 5, 50)}, input_map);
-        vertex = graph->add(IGpuFx::createGate(0.2, 100, 5, 50), vertex);
-        auto vertices = graph->split({
-                                         IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size),
-                                         IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size),
-                                     },
-                                     vertex);
+    vertex = graph->add(IGpuFx::createConv1i1(IPCMSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav")), 1 << 12), vertex);
+    vertex = graph->add(IGpuFx::createBiquadEQ({
+                            IBiquadParam::create(BiquadType::PEAK, 500, 0, 3),
+                            IBiquadParam::create(BiquadType::PEAK, 500, 0, 3),
+                            IBiquadParam::create(BiquadType::PEAK, 500, 0, 3),
+                            IBiquadParam::create(BiquadType::PEAK, 500, 0, 3),
+                            IBiquadParam::create(BiquadType::PEAK, 500, 0, 3),
+                        }),
+                        vertex);
+    graph->add(IGpuFx::createOutputMap({0}));
 
-        vertices[0] = graph->add(IGpuFx::createConv1i1(signal->clone(), 1 << 12, 0, true), vertices[0]);
-        vertices[1] = graph->add(IGpuFx::createConv1i1(signal->clone(), 1 << 12, 0, true), vertices[1]);
-        vertex = graph->merge(IGpuFx::createInputMap({0, 1}), vertices);
-        vertex = graph->add(IGpuFx::createBiquadEQ({
-                                IBiquadParam::create(BiquadType::PEAK, 500, -13, 3),
-                                IBiquadParam::create(BiquadType::PEAK, 500, -13, 3),
-                                IBiquadParam::create(BiquadType::PEAK, 500, -13, 3),
-                                IBiquadParam::create(BiquadType::PEAK, 500, -13, 3),
-                                IBiquadParam::create(BiquadType::PEAK, 500, -13, 3),
-                            }),
-                            vertex);
-        eq_vertices.push_back(vertex);
-    }
-    graph->merge(IGpuFx::createMixSegment(4, 2), eq_vertices);
-    graph->add(IGpuFx::createOutputMap({0, 1}));
+    driver->addSignalChain((ISignalGraph*)graph, {"capture_1"}, {"playback_1"});
 
-    driver->addSignalChain((ISignalGraph*)graph, {"capture_1"}, {"playback_1", "playback_2"});
-
-    driver->start();
+    driver->start(false);
 
     if (timeout > 0) {
+        sleep(5);
+        spdlog::info("updating mix_ratio to 0.5");
+        fx_nam->setSoftParams(0.5f);
+        sleep(5);
+        spdlog::info("updating mix_ratio to 0.0");
+        fx_nam->setSoftParams(0.0f);
         sleep(timeout);
     } else {
         std::cin.get();
@@ -66,26 +58,9 @@ void run_jack(int timeout = 0) {
     delete driver;
 }
 
-// void run_signal() {
-//     selectGpu();
-//     size_t fft_size = 1 << 17;
-//     size_t buffer_size = 1 << 5;
-//     Driver* driver = Driver::createSignalDriver();
-//     IGpuSignalChain* chain = IGpuSignalChain::createGpuSignalChain();
-//     chain->configure(buffer_size, 2);
-//     driver->setBufferSize(buffer_size);
-//     driver->addSignalChain(chain, {""}, {"/home/nvidia/git/mt/res/sine-generator-out.wav"});
-//     driver->start();
-
-//     delete chain;
-//     delete driver;
-// }
-
 int main(int argc, char* argv[]) {
     spdlog::set_level(spdlog::level::info);
     run_jack(500);
-
-    // run_signal();
 
     return 0;
 }
