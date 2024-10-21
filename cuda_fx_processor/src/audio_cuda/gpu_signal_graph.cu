@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cuda_ext.cuh>
 #include <future>
+#include <kernels.cuh>
 #include <log.hpp>
 #include <ringbuffer.hpp>
 #include <stdexcept>
@@ -191,6 +192,7 @@ class GpuSignalGraph : public IGpuSignalGraph {
     std::vector<RingBuffer*> _output_ringbuffers;
     std::vector<float*> _input_buffers;
     std::vector<float*> _output_buffers;
+    float* _spinning_buffer;
 
     size_t _n_proc_frames;
     size_t _n_in_channels;
@@ -199,9 +201,12 @@ class GpuSignalGraph : public IGpuSignalGraph {
 
     cudaGraph_t _setup_graph;
     cudaGraph_t _process_graph;
+    cudaGraph_t _spin_graph;
     cudaGraphExec_t _setup_graph_exec;
     cudaGraphExec_t _process_graph_exec;
+    cudaGraphExec_t _spin_graph_exec;
     cudaStream_t _stream;
+    cudaEvent_t spin_start, proc_start, proc_stop;
 
     void updateLeaves() {
         _leaves.clear();
@@ -212,7 +217,7 @@ class GpuSignalGraph : public IGpuSignalGraph {
         }
     }
 
-    void _process(const std::vector<float*>& dst_bufs, const std::vector<float*>& src_bufs) {
+    void _processSync(const std::vector<float*>& dst_bufs, const std::vector<float*>& src_bufs) {
         for (auto vertex : _fx_vertices) {
             vertex->getFx()->updateSoftParams(_process_graph_exec, vertex->getProcessNode());
         }
@@ -222,8 +227,7 @@ class GpuSignalGraph : public IGpuSignalGraph {
         for (size_t i = 0; i < _output_vertices.size(); i++) {
             _output_vertices[i]->setDestPtr({Buffer::create(dst_bufs[i], BufferSpecs(MemoryContext::HOST, _n_proc_frames))}, _process_graph_exec);
         }
-        gpuErrChk(cudaGraphLaunch(_process_graph_exec, _stream));
-        gpuErrChk(cudaStreamSynchronize(_stream));
+        _process();
     }
 
     void _processAsync(const std::vector<float*>& dst_bufs, const std::vector<float*>& src_bufs) {
@@ -241,41 +245,46 @@ class GpuSignalGraph : public IGpuSignalGraph {
         for (auto vertex : _fx_vertices) {
             vertex->getFx()->updateSoftParams(_process_graph_exec, vertex->getProcessNode());
         }
+
+        // using a spin kernel to keep the CUDA scheduler awake while waiting for new data
+        // at a higher CUDA version this should be replaced with a WHILE node at the start of the process graph
         for (size_t i = 0; i < _n_in_channels; i++) {
             float* input_ptr;
             while (_input_ringbuffers[i]->getReadPtr(&input_ptr, _n_proc_frames) <= 0) {
+                gpuErrChk(cudaStreamSynchronize(_stream));
+                gpuErrChk(cudaGraphLaunch(_spin_graph_exec, _stream));
             }
             _input_vertices[i]->setSrcPtr({Buffer::create(input_ptr, BufferSpecs(MemoryContext::HOST, _n_proc_frames))}, _process_graph_exec);
         }
         for (size_t i = 0; i < _n_out_channels; i++) {
-            float* input_ptr;
-            while (_output_ringbuffers[i]->getWritePtr(&input_ptr, _n_proc_frames) <= 0) {
+            float* output_ptr;
+            while (_output_ringbuffers[i]->getWritePtr(&output_ptr, _n_proc_frames) <= 0) {
+                gpuErrChk(cudaStreamSynchronize(_stream));
+                gpuErrChk(cudaGraphLaunch(_spin_graph_exec, _stream));
             }
-            _output_vertices[i]->setDestPtr({Buffer::create(input_ptr, BufferSpecs(MemoryContext::HOST, _n_proc_frames))}, _process_graph_exec);
+            _output_vertices[i]->setDestPtr({Buffer::create(output_ptr, BufferSpecs(MemoryContext::HOST, _n_proc_frames))}, _process_graph_exec);
         }
-        // for (size_t i = 0; i < _n_in_channels; i++) {
-        //     while (_input_ringbuffers[i]->read(_input_buffers[i], _n_proc_frames) <= 0) {
-        //         // spdlog::info("Wait for read data");
-        //     }
-        //     _input_vertices[i]->setSrcPtr({Buffer::create(_input_buffers[i], BufferSpecs(MemoryContext::HOST, _n_proc_frames))}, _process_graph_exec);
-        // }
-
-        gpuErrChk(cudaGraphLaunch(_process_graph_exec, _stream));
-        gpuErrChk(cudaStreamSynchronize(_stream));
-
-        // for(size_t i = 0; i < _n_out_channels; i++) {
-        //     while (_output_ringbuffers[i]->write(_output_buffers[i], _n_proc_frames) <= 0) {
-        //         // spdlog::info("Wait for write data");
-        //     }
-        //     _output_vertices[i]->setDestPtr({Buffer::create(_output_buffers[i], BufferSpecs(MemoryContext::HOST, _n_proc_frames))}, _process_graph_exec);
-        // }
+        _process();
         for (size_t i = 0; i < _n_out_channels; i++) {
-            _output_ringbuffers[i]->advanceWriteIndex(_n_proc_frames);
+            while (_output_ringbuffers[i]->advanceWriteIndex(_n_proc_frames) <= 0) {
+            }
         }
         for (size_t i = 0; i < _n_in_channels; i++) {
-            _input_ringbuffers[i]->advanceReadIndex(_n_proc_frames);
+            while (_input_ringbuffers[i]->advanceReadIndex(_n_proc_frames) <= 0) {
+            }
         }
-        // spdlog::info("Processed async frame");
+    }
+
+    void _process() {
+        gpuErrChk(cudaEventRecord(proc_start, _stream));
+        gpuErrChk(cudaGraphLaunch(_process_graph_exec, _stream));
+        gpuErrChk(cudaEventRecord(proc_stop, _stream));
+        gpuErrChk(cudaEventSynchronize(proc_stop));
+        float proc_time = 0;
+        gpuErrChk(cudaEventElapsedTime(&proc_time, proc_start, proc_stop));
+        if (proc_time > _n_proc_frames / 48.0f) {
+            spdlog::warn("Processing time: {} ms", std::to_string(proc_time));
+        }
     }
 
    public:
@@ -292,8 +301,18 @@ class GpuSignalGraph : public IGpuSignalGraph {
         for (GpuSignalVertex* vertex : _output_vertices) {
             delete vertex;
         }
-        gpuErrChk(cudaGraphDestroy(_process_graph));
-        gpuErrChk(cudaGraphExecDestroy(_process_graph_exec));
+        for (RingBuffer* buffer : _input_ringbuffers) {
+            delete buffer;
+        }
+        for (RingBuffer* buffer : _output_ringbuffers) {
+            delete buffer;
+        }
+        for (float* buffer : _input_buffers) {
+            delete[] buffer;
+        }
+        for (float* buffer : _output_buffers) {
+            delete[] buffer;
+        }
     }
 
     size_t getInputChannelCount() {
@@ -308,8 +327,22 @@ class GpuSignalGraph : public IGpuSignalGraph {
         _n_proc_frames = n_proc_frames;
         _n_in_channels = n_in_channels;
         _async = async;
+
+        gpuErrChk(cudaEventCreate(&spin_start));
+        gpuErrChk(cudaEventCreate(&proc_start));
+        gpuErrChk(cudaEventCreate(&proc_stop));
         gpuErrChk(cudaGraphCreate(&_setup_graph, 0));
         gpuErrChk(cudaGraphCreate(&_process_graph, 0));
+
+        // the spin kernel copies splin_buffer_size samples in place
+        // too small buffer size will overload the scheduler leading to bad performance of the process graph
+        // too large buffer size can delay the next process graph execution too much (unfortunately CUDA 11.4 does not have a good option to terminate a kernel from host)
+        // 2 * n_proc_frames has been found to be a good compromise
+        size_t spin_buffer_size = std::min(768, 2 * static_cast<int>(n_proc_frames));
+        gpuErrChk(cudaGraphCreate(&_spin_graph, 0));
+        gpuErrChk(cudaMalloc(&_spinning_buffer, spin_buffer_size * sizeof(float)));
+        IKernelNode::create(1, spin_buffer_size, 0, (void*)spin_kernel, new void*[3]{&_spinning_buffer, &_spinning_buffer, &_n_proc_frames}, _spin_graph);
+        gpuErrChk(cudaGraphInstantiate(&_spin_graph_exec, _spin_graph, NULL, NULL, 0));
 
         std::vector<GpuSignalVertex*> queue;
         std::vector<GpuSignalVertex*> orphans;
@@ -384,11 +417,11 @@ class GpuSignalGraph : public IGpuSignalGraph {
 
         if (_async) {
             for (size_t i = 0; i < _n_in_channels; i++) {
-                _input_ringbuffers.push_back(RingBuffer::create(n_proc_frames, 4));
+                _input_ringbuffers.push_back(RingBuffer::create(n_proc_frames, 16));
                 _input_buffers.push_back(new float[n_proc_frames]);
             }
             for (size_t i = 0; i < _n_out_channels; i++) {
-                _output_ringbuffers.push_back(RingBuffer::create(n_proc_frames, 4));
+                _output_ringbuffers.push_back(RingBuffer::create(n_proc_frames, 16, 0));
                 _output_buffers.push_back(new float[n_proc_frames]);
             }
             std::thread([this]() {
@@ -403,7 +436,7 @@ class GpuSignalGraph : public IGpuSignalGraph {
         if (_async) {
             _processAsync(dst_bufs, src_bufs);
         } else {
-            _process(dst_bufs, src_bufs);
+            _processSync(dst_bufs, src_bufs);
         }
     }
 
@@ -412,6 +445,17 @@ class GpuSignalGraph : public IGpuSignalGraph {
             gpuErrChk(cudaFree(buffer->getDataMod()));
         }
         gpuErrChk(cudaStreamDestroy(_stream));
+
+        gpuErrChk(cudaEventDestroy(spin_start));
+        gpuErrChk(cudaEventDestroy(proc_start));
+        gpuErrChk(cudaEventDestroy(proc_stop));
+
+        gpuErrChk(cudaGraphDestroy(_process_graph));
+        gpuErrChk(cudaGraphExecDestroy(_process_graph_exec));
+        gpuErrChk(cudaGraphDestroy(_setup_graph));
+        gpuErrChk(cudaGraphExecDestroy(_setup_graph_exec));
+        gpuErrChk(cudaGraphDestroy(_spin_graph));
+        gpuErrChk(cudaGraphExecDestroy(_spin_graph_exec));
     }
 
     IGpuSignalVertex* add(IGpuFx* fx, IGpuSignalVertex* parent = nullptr) override {

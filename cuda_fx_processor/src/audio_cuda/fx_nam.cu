@@ -1,47 +1,12 @@
 
 #include <cuda_ext.cuh>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <opencv2/core/cuda.hpp>
-#include <opencv2/cudaarithm.hpp>
-#include <opencv2/cudaimgproc.hpp>
-#include <opencv2/cudawarping.hpp>
-#include <opencv2/opencv.hpp>
-#include <stdexcept>
 #include <trt_engine.cuh>
 
-#include "NvOnnxParser.h"
 #include "gpu.cuh"
 #include "gpu_fx.cu"
 #include "kernels.cuh"
 #include "log.hpp"
 #include "spdlog/spdlog.h"
-
-using namespace nvinfer1;
-
-class NvInverLogger : public nvinfer1::ILogger {
-    void log(Severity severity, const char* msg) noexcept {
-        spdlog::level::level_enum level = spdlog::level::level_enum::critical;
-        // suppress info-level messages
-        switch (severity) {
-            case Severity::kINTERNAL_ERROR:
-            case Severity::kERROR:
-                level = spdlog::level::level_enum::err;
-                break;
-            case Severity::kWARNING:
-                level = spdlog::level::level_enum::warn;
-                break;
-            case Severity::kINFO:
-                level = spdlog::level::level_enum::debug;
-                break;
-            case Severity::kVERBOSE:
-                level = spdlog::level::level_enum::trace;
-                break;
-        }
-        spdlog::log(level, "NvInfer: {}", msg);
-    }
-};
 
 class FxNam : public GpuFx {
    private:
@@ -82,7 +47,7 @@ class FxNam : public GpuFx {
             spdlog::warn("{} can only process a single channel. n_input_channels and n_output_channels are overwritten by 1", _name);
         }
         GpuFx::configure(process_buffer_size, 1, 1);
-        _trt_engine->configure(process_buffer_size, n_input_channels, n_output_channels);
+        _trt_engine->configure(process_buffer_size, 8190, n_input_channels, n_output_channels);
     }
 
     void updateBufferPtrs(cudaGraphExec_t procGraphExec, const BufferRack* dst, const BufferRack* src) override {

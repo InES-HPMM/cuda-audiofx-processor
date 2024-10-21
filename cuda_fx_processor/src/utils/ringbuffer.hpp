@@ -2,7 +2,7 @@
 #include <stddef.h>
 class RingBuffer {
    public:
-    static RingBuffer* create(size_t block_size, size_t n_blocks);
+    static RingBuffer* create(size_t block_size, size_t n_blocks, size_t n_init_block_filled = 0);
     virtual ~RingBuffer() {}
 
     virtual size_t getReadSpace() const = 0;
@@ -13,6 +13,6 @@ class RingBuffer {
     virtual size_t getReadPtr(float** read_ptr, size_t n) = 0;
 
     virtual size_t getWritePtr(float** write_ptr, size_t n) = 0;
-    virtual void advanceReadIndex(size_t n) = 0;
-    virtual void advanceWriteIndex(size_t n) = 0;
+    virtual size_t advanceReadIndex(size_t n) = 0;
+    virtual size_t advanceWriteIndex(size_t n) = 0;
 };

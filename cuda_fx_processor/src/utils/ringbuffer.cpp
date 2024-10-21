@@ -15,8 +15,9 @@ class RingBufferImpl : public RingBuffer {
     size_t _size_mask;
 
    public:
-    RingBufferImpl(size_t block_size, size_t n_blocks) : _size(roundUpToPow2(block_size * n_blocks)), _size_mask(_size - 1), _read_index(0), _write_index(0) {
+    RingBufferImpl(size_t block_size, size_t n_blocks, size_t n_init_block_filled) : _size(roundUpToPow2(block_size * n_blocks)), _size_mask(_size - 1), _read_index(0), _write_index(n_init_block_filled*block_size) {
         _buffer = new float[_size];
+        memset(_buffer, 0, _size * sizeof(float));
         spdlog::info("size mask: {}", _size_mask);
         spdlog::info("size mask hex: {:#x}", _size_mask);
     }
@@ -28,7 +29,7 @@ class RingBufferImpl : public RingBuffer {
         __atomic_thread_fence(__ATOMIC_ACQUIRE);
         r = _read_index;
 
-        return (r - w) & _size_mask;
+        return (w - r) & _size_mask;
     }
 
     size_t getWriteSpace() const override {
@@ -131,19 +132,27 @@ class RingBufferImpl : public RingBuffer {
         return n;
     }
 
-    void advanceReadIndex(size_t n) override {
+    size_t advanceReadIndex(size_t n) override {
+        if (getReadSpace() < n) {
+            return 0;
+        }
         size_t tmp = (_read_index + n) & _size_mask;
         __atomic_thread_fence(__ATOMIC_RELEASE); /* ensure pointer increment happens after copy */
         _read_index = tmp;
+        return n;
     }
 
-    void advanceWriteIndex(size_t n) override {
+    size_t advanceWriteIndex(size_t n) override {
+        if (getWriteSpace() < n) {
+            return 0;
+        }
         size_t tmp = (_write_index + n) & _size_mask;
         __atomic_thread_fence(__ATOMIC_RELEASE); /* ensure pointer increment happens after copy */
         _write_index = tmp;
+        return n;
     }
 };
 
-RingBuffer* RingBuffer::create(size_t block_size, size_t n_blocks) {
-    return new RingBufferImpl(block_size, n_blocks);
+RingBuffer* RingBuffer::create(size_t block_size, size_t n_blocks, size_t n_init_block_filled) {
+    return new RingBufferImpl(block_size, n_blocks, n_init_block_filled);
 }
