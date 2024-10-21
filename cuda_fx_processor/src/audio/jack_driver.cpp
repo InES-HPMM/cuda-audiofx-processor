@@ -54,6 +54,7 @@ class JackDriver : public Driver {
 
     static int xrunCallback(void* arg) {
         auto jc = static_cast<JackDriver*>(arg);
+        jc->xrun();
         return 0;
     }
 
@@ -102,7 +103,9 @@ class JackDriver : public Driver {
         // while (chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - start).count() < 100) {
         // }
     }
-
+    void xrun() {
+        spdlog::warn("Jack xrun detected");
+    }
     void shutdown() {
     }
 
