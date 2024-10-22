@@ -20,7 +20,7 @@
 
 bool ir_2i2_impulse_test() {
     IPCMSignal* ir_pcm = IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-2c.wav"));
-    IGpuFx* fx = IGpuFx::createConv2i2(ir_pcm, 1 << 16, 0, 1.0f);
+    IGpuFx* fx = IGpuFx::createConv2c2(ir_pcm, 1 << 16, 0, 1.0f);
 
     float* impulse = new float[ir_pcm->getSampleCount() * 2];
     memset(impulse, 0, ir_pcm->getSampleCount() * 2 * sizeof(float));
@@ -39,7 +39,7 @@ bool ir_2i2_impulse_test() {
 bool ir_2i1_impulse_test() {
     IPCMSignal* ir_pcm = IPCMSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav"));
     IFPSignal* ir_float = IFPSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-2c.wav"), ChannelOrder::INTERLEAVED);
-    IGpuFx* fx = IGpuFx::createConv2i1(ir_pcm, ir_pcm->getSampleCount(), 0, 1.0f);
+    IGpuFx* fx = IGpuFx::createConv2c1(ir_pcm, ir_pcm->getSampleCount(), 0, 1.0f);
 
     float* impulse = new float[ir_float->getSampleCount()];
     memset(impulse, 0, ir_float->getSampleCount() * sizeof(float));
@@ -59,7 +59,7 @@ bool ir_2i1_impulse_test() {
 bool ir_1i1_impulse_test() {
     IPCMSignal* ir_pcm = IPCMSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav"));
     IFPSignal* ir_float = IFPSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav"), ChannelOrder::INTERLEAVED);
-    IGpuFx* fx = IGpuFx::createConv1i1(ir_pcm, ir_pcm->getSampleCount(), 0, 1.0f);
+    IGpuFx* fx = IGpuFx::createConv1c1(ir_pcm, ir_pcm->getSampleCount(), 0, 1.0f);
 
     float* impulse = new float[ir_pcm->getSampleCount()];
     memset(impulse, 0, ir_pcm->getSampleCount() * sizeof(float));
@@ -278,7 +278,7 @@ bool testParamUpdate() {
 
     auto fx_gate = IGpuFx::createGate(0.05, 100, 500, 50);
     auto fx_nam = IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size);
-    auto fx_cab = IGpuFx::createConv1i1(IPCMSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav")), 1 << 12, 0, 1.0f);
+    auto fx_cab = IGpuFx::createConv1c1(IPCMSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav")), 1 << 12, 0, 1.0f);
     auto fx_eq = IGpuFx::createBiquadEQ({
         IBiquadParam::create(BiquadType::PEAK, 100, -10, 3),
         IBiquadParam::create(BiquadType::PEAK, 500, 10, 3),

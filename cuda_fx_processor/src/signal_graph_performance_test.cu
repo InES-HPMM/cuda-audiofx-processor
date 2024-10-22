@@ -144,7 +144,7 @@ void parallelIr(std::vector<PerformanceMeasurement*>& measurements, size_t proce
 
     std::vector<IGpuSignalVertex*> vertices;
     for (size_t i = 0; i < n_lanes; i++) {
-        auto vertex = graph->split({IGpuFx::createConv2i2(IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-2c.wav")), 1 << 16, 0, 0.5f)}, input_map)[0];
+        auto vertex = graph->split({IGpuFx::createConv2c2(IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-2c.wav")), 1 << 16, 0, 0.5f)}, input_map)[0];
         vertices.push_back(vertex);
     }
 
@@ -162,7 +162,7 @@ void serialIr(std::vector<PerformanceMeasurement*>& measurements, size_t process
 
     std::vector<IGpuSignalVertex*> vertices;
     for (size_t i = 0; i < n_lanes; i++) {
-        auto vertex = graph->add(IGpuFx::createConv1i1(IPCMSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav")), 1 << 12, 0, 1.0f));
+        auto vertex = graph->add(IGpuFx::createConv1c1(IPCMSignal::readFromFile(path::ir("engl-2022-v30-57-48k-24b-1c.wav")), 1 << 12, 0, 1.0f));
         vertices.push_back(vertex);
     }
 
@@ -186,7 +186,7 @@ void gitParallel(std::vector<PerformanceMeasurement*>& measurements, size_t proc
         auto vertex = graph->add({IGpuFx::createGate(0.2, 100, 5, 50)}, input_map);
         vertex = graph->add(IGpuFx::createGate(0.2, 100, 5, 50), vertex);
         vertex = graph->add(IGpuFx::createNam(path::models("nam_convnet_pedal_amp.onnx"), path::out(), TrtEnginePrecision::FP32, process_buffer_size), vertex);
-        vertex = graph->add(IGpuFx::createConv1i1(IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-1c.wav")), 1 << 12, 0, 1.0f), vertex);
+        vertex = graph->add(IGpuFx::createConv1c1(IPCMSignal::readFromFile(path::ir("vocal-duo-48k-24b-1c.wav")), 1 << 12, 0, 1.0f), vertex);
         vertex = graph->add(IGpuFx::createBiquadEQ({
                                 IBiquadParam::create(BiquadType::PEAK, 500, -13, 3),
                                 IBiquadParam::create(BiquadType::PEAK, 500, -13, 3),
@@ -224,8 +224,8 @@ void gitComplex(std::vector<PerformanceMeasurement*>& measurements, size_t proce
                                      },
                                      vertex);
 
-        vertices[0] = graph->add(IGpuFx::createConv1i1(signal->clone(), 1 << 12, 0, 1.0f), vertices[0]);
-        vertices[1] = graph->add(IGpuFx::createConv1i1(signal->clone(), 1 << 12, 0, 1.0f), vertices[1]);
+        vertices[0] = graph->add(IGpuFx::createConv1c1(signal->clone(), 1 << 12, 0, 1.0f), vertices[0]);
+        vertices[1] = graph->add(IGpuFx::createConv1c1(signal->clone(), 1 << 12, 0, 1.0f), vertices[1]);
         vertex = graph->merge(IGpuFx::createInputMap({0, 1}), vertices);
         vertex = graph->add(IGpuFx::createBiquadEQ({
                                 IBiquadParam::create(BiquadType::PEAK, 500, -13, 3),

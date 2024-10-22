@@ -23,9 +23,9 @@ class IBiquadParam {
 
 class IGpuFx {
    public:
-    static IGpuFx* createConv1i1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale = -18, float mix_ratio = 1.0f);
-    static IGpuFx* createConv2i1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale = -18, float mix_ratio = 1.0f);
-    static IGpuFx* createConv2i2(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale = -18, float mix_ratio = 1.0f);
+    static IGpuFx* createConv1c1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale = -18, float mix_ratio = 1.0f);
+    static IGpuFx* createConv2c1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale = -18, float mix_ratio = 1.0f);
+    static IGpuFx* createConv2c2(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale = -18, float mix_ratio = 1.0f);
     static IGpuFx* createPassThrough();
     static IGpuFx* createBiquadEQ(IBiquadParam* param, size_t n_channels = 1);
     static IGpuFx* createBiquadEQ(std::vector<IBiquadParam*> params, size_t n_channels = 1);

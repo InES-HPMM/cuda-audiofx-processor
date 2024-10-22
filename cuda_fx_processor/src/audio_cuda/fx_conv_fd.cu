@@ -75,13 +75,13 @@ __global__ static void f2fff2_pointwiseAdd(float2* dst, float* src1x, float* src
     }
 }
 
-__global__ static void f2fff2_mix_residual(float2* dst, float2 src1, float* src2_x, float* src2_y, const float2* src2_residual, size_t n, float ratio) {
+__global__ static void f2fff2_mix_residual(float2* dst, float2* src1, float* src2_x, float* src2_y, const float2* src2_residual, size_t n, float ratio) {
     auto stride = gridDim * blockDim;
     auto offset = blockDim * blockIdx + threadIdx;
 
     for (auto s = offset.x; s < n; s += stride.x) {
-        dst[s].x = src1.x * (1.0f - ratio) + (src2_x[s] + src2_residual[s].x) * ratio;
-        dst[s].y = src1.y * (1.0f - ratio) + (src2_y[s] + src2_residual[s].y) * ratio;
+        dst[s].x = src1[s].x * (1.0f - ratio) + (src2_x[s] + src2_residual[s].x) * ratio;
+        dst[s].y = src1[s].y * (1.0f - ratio) + (src2_y[s] + src2_residual[s].y) * ratio;
     }
 }
 
@@ -298,7 +298,7 @@ class FxConvFd1c1 : public FxConvFd {
     }
 };
 
-IGpuFx* IGpuFx::createConv1i1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) {
+IGpuFx* IGpuFx::createConv1c1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) {
     return new FxConvFd1c1(ir_signal, max_ir_size, ir_db_scale, mix_ratio);
 }
 
@@ -418,7 +418,7 @@ class FxConvFd2c1 : public FxConvFd {
         return new FxConvFd2c1(_ir_signal->clone(), _fft_size, _ir_db_scale, _force_wet_mix);
     }
 };
-IGpuFx* IGpuFx::createConv2i1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) {
+IGpuFx* IGpuFx::createConv2c1(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) {
     return new FxConvFd2c1(ir_signal, max_ir_size, ir_db_scale, mix_ratio);
 }
 
@@ -559,6 +559,6 @@ class FxConvFd2c2 : public FxConvFd {
     }
 };
 
-IGpuFx* IGpuFx::createConv2i2(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) {
+IGpuFx* IGpuFx::createConv2c2(IPCMSignal* ir_signal, size_t max_ir_size, int ir_db_scale, float mix_ratio) {
     return new FxConvFd2c2(ir_signal, max_ir_size, ir_db_scale, mix_ratio);
 }
