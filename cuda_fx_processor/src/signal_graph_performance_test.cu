@@ -279,8 +279,8 @@ int main(int argc, char** argv) {
     // gitParallel(measurements, process_buffer_size, n_warmup, n_measure, false, n_lanes);
     // PerformanceMeasurement::writeStatisticsToCsv(path::out("parallel-git-" + std::to_string(process_buffer_size) + "f.csv"), measurements, true);
 
-    // gitComplex(measurements, process_buffer_size, n_warmup, n_measure, false);
-    // PerformanceMeasurement::writeStatisticsToCsv(path::out("parallel-git-" + std::to_string(process_buffer_size) + "f.csv"), measurements, true);
+    gitComplex(measurements, process_buffer_size, n_warmup, n_measure, false);
+    PerformanceMeasurement::writeStatisticsToCsv(path::out("parallel-git-" + std::to_string(process_buffer_size) + "f.csv"), measurements, true);
 
     return 0;
 }
