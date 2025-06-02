@@ -1,5 +1,5 @@
 {
-    "cmake.sourceDirectory": "/home/nvidia/git/mt-dist/cuda_fx_processor",
+    "cmake.sourceDirectory": "${workspaceFolder}/cuda_fx_processor",
     "cmake.buildDirectory": "${workspaceFolder}/cuda_fx_processor/build",
     "cmake.environment": {
         "DIST": "${workspaceFolder}/dist"

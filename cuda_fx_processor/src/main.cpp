@@ -50,7 +50,7 @@ void presentation(bool async, size_t n_inputs, size_t buffer_size) {
     auto g1_gate = IGpuFx::createGate(0.005, 50, 5, 50);
     auto g1_amp1 = IGpuFx::createNam(path::models("nam_convnet_BDHIII_pedal_amp_E400.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size);
     auto g1_amp2 = IGpuFx::createNam(path::models("nam_convnet_BDH5169_pedal_amp_E400.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size);
-    auto g1_ir = IGpuFx::createConv2c2(ir_engl, 1 << 12, -7);
+    auto g1_ir = IGpuFx::createConv2c2(ir_engl, 1 << 12, -18);
     auto g1_eq = IGpuFx::createBiquadEQ({
         IBiquadParam::create(BiquadType::PEAK, 150, 3, 1),
         IBiquadParam::create(BiquadType::PEAK, 250, -5, 3),
@@ -63,7 +63,7 @@ void presentation(bool async, size_t n_inputs, size_t buffer_size) {
     auto g2_gate = IGpuFx::createGate(0.01, 50, 5, 50);
     auto g2_amp1 = IGpuFx::createNam(path::models("nam_convnet_BDH5169_pedal_amp_E400.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size);
     auto g2_amp2 = IGpuFx::createNam(path::models("nam_convnet_BDHIII_pedal_amp_E400.onnx"), path::out(), TrtEnginePrecision::FP32, buffer_size);
-    auto g2_ir = IGpuFx::createConv2c2(ir_smg, 1 << 12, -7);
+    auto g2_ir = IGpuFx::createConv2c2(ir_smg, 1 << 12, -18);
     auto g2_eq = IGpuFx::createBiquadEQ({
         IBiquadParam::create(BiquadType::PEAK, 150, 3, 1),
         IBiquadParam::create(BiquadType::PEAK, 250, -5, 3),
@@ -197,7 +197,7 @@ void presentation_live(bool async, size_t n_inputs, size_t buffer_size) {
 
     graph->add(IGpuFx::createOutputMap({0, 1}));
 
-    driver->addSignalChain((ISignalGraph*)graph, {"capture_1"}, {"playback_1", "playback_2"});
+    driver->addSignalChain((ISignalGraph*)graph, {"capture_2"}, {"playback_1", "playback_2"});
     driver->start(async);
 
     g1_amp1->setSoftParams(0);
@@ -267,8 +267,8 @@ int main(int argc, char* argv[]) {
     spdlog::set_level(spdlog::level::info);
     selectGpu();
     // run_jack(async, n_inputs, buffer_size, 500);
-    // presentation(async, n_inputs, buffer_size);
-    presentation_live(async, n_inputs, buffer_size);
+    presentation(async, n_inputs, buffer_size);
+    // presentation_live(async, n_inputs, buffer_size);
 
     return 0;
 }
